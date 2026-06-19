@@ -1,0 +1,7 @@
+# MinGW 链接器与 ar 显式指向（避免 PATH 解析问题）
+[target.x86_64-pc-windows-gnu]
+linker = "G:\\mingw64\\bin\\gcc.exe"
+ar = "G:\\mingw64\\bin\\ar.exe"
+# 静态库符号不外导出,避免 MinGW 8.1 ld 报 "export ordinal too large"
+# (Tauri 2 含大量传递依赖,符号数超过 65535 ordinal 上限)
+rustflags = ["-C", "link-arg=-Wl,--exclude-libs=ALL"]

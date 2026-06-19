@@ -1,0 +1,111 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* =========================================================
+ *  Modern Crisp & Full-Bleed —— 全局基础
+ *  纯黑曜石底色 + 极细滚动条
+ * ========================================================= */
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background-color: #0b0f17;
+  color: #d8dee9;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans",
+    "微软雅黑", serif;
+  font-size: 14px;
+  line-height: 1.5;
+  overflow: hidden;
+}
+
+/* === 默认滚动条:暗色半透明白 === */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+/* === 极细滚动条:WORKSPACE / CHANGES 面板使用 === */
+.scrollbar-thin::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 9999px;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+/* =========================================================
+ *  黑曜石冰块按钮 .gel-box —— 顶部「选择仓库 / 刷新」按钮使用
+ *  深色半透明 + 顶部刀锋高光折射 + 深海重阴影
+ *
+ *  【图层分离架构保留】
+ *  - 文字/icon 是 .gel-box 的直接子元素,在默认 z 轴层,清晰锐利
+ *  - ::after 用 z-index: -1 沉到文字之下,不污染文字渲染
+ * ========================================================= */
+.gel-box {
+  position: relative;
+  isolation: isolate;
+  background: rgba(18, 24, 38, 0.65);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 16px;
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.15),
+    inset 1px 0 0 0 rgba(255, 255, 255, 0.05),
+    0 8px 32px 0 rgba(0, 0, 0, 0.4);
+  color: #d8dee9;
+}
+
+/* ::after:冷蓝微光渐变,几乎透明,黑冰表面极淡反光 */
+.gel-box::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(
+    135deg,
+    rgba(70, 230, 255, 0.06) 0%,
+    transparent 35%,
+    transparent 65%,
+    rgba(70, 230, 255, 0.04) 100%
+  );
+  opacity: 0.5;
+}
+
+/* 让 diff 视图占满 */
+.diff-view-host {
+  height: 100%;
+  width: 100%;
+  overflow: auto;
+}
+
+/* =========================================================
+ *  @git-diff-view/react 暗色微调
+ *  —— data-theme="dark" 时,优化与黑曜石底色的融合
+ * ========================================================= */
+[data-theme="dark"] .diff-style-root,
+[data-theme="dark"] .diff-tailwindcss-wrapper {
+  color: #d8dee9;
+}

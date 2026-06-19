@@ -1,0 +1,18 @@
+// Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
+
+mod commands;
+mod git_ops;
+
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
+pub fn run() {
+    tauri::Builder::default()
+        .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
+        .invoke_handler(tauri::generate_handler![
+            commands::get_git_status,
+            commands::get_file_content,
+            commands::read_directory,
+        ])
+        .run(tauri::generate_context!())
+        .expect("error while running tauri application");
+}

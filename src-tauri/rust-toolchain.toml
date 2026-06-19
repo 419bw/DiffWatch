@@ -1,0 +1,3 @@
+[toolchain]
+# MSVC 缺 link.exe；改用 gnu 工具链（自带 MinGW 兼容的链接器，rustc 也是 gnu 编译的）
+channel = "stable-x86_64-pc-windows-gnu"
