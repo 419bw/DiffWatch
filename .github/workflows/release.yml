@@ -12,6 +12,10 @@ jobs:
   release:
     name: Build & Publish Windows Release
     runs-on: windows-latest
+
+
+    permissions:
+      contents: write
     
     steps:
       - name: Checkout
