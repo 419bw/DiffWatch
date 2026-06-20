@@ -19,3 +19,10 @@ export const getFileContent = (repoPath: string, filePath: string) =>
 /** 读取单个目录的单层条目 —— WORKSPACE 懒加载树每次展开都调一次 */
 export const readDirectory = (dirPath: string) =>
   invoke<FileEntry[]>("read_directory", { dirPath });
+
+/** 启动 / 替换仓库目录监听器 —— 前端在 repoPath 变化时调用 */
+export const startWatching = (repoPath: string) =>
+  invoke<void>("start_watching", { repoPath });
+
+/** 停止监听(可选 —— 前端不需要时调用) */
+export const stopWatching = () => invoke<void>("stop_watching");

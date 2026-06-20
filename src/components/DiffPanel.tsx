@@ -9,9 +9,11 @@ import type { FileDiffData } from "../types";
 interface DiffPanelProps {
   repoPath: string;
   filePath: string;
+  /** 外部文件变更计数器 —— App.tsx 在 repo-changed 时 +1,触发 diff 重拉 */
+  refreshKey: number;
 }
 
-export default function DiffPanel({ repoPath, filePath }: DiffPanelProps) {
+export default function DiffPanel({ repoPath, filePath, refreshKey }: DiffPanelProps) {
   const [highlighter, setHighlighter] = useState<any>(null);
   const [diffData, setDiffData] = useState<FileDiffData | null>(null);
   const [loading, setLoading] = useState(false);
@@ -31,7 +33,7 @@ export default function DiffPanel({ repoPath, filePath }: DiffPanelProps) {
     };
   }, []);
 
-  // 文件变化时拉数据
+  // 文件变化时拉数据 —— repoPath / filePath / refreshKey 任一变化都重拉
   useEffect(() => {
     if (!repoPath || !filePath) {
       setDiffData(null);
@@ -53,7 +55,7 @@ export default function DiffPanel({ repoPath, filePath }: DiffPanelProps) {
     return () => {
       cancelled = true;
     };
-  }, [repoPath, filePath]);
+  }, [repoPath, filePath, refreshKey]);
 
   if (loading) {
     return (

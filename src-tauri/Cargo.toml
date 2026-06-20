@@ -24,3 +24,5 @@ tauri-plugin-dialog = "2" # 选仓库文件夹对话框
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 git2 = { version = "0.19", features = ["vendored-libgit2"] } # 不调系统 git，vendored 避免 Windows 缺 libgit2
+notify = "6.1"                     # 文件系统事件监听
+notify-debouncer-full = "0.3.2"    # notify + 内置防抖(200ms)
