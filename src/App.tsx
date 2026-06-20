@@ -158,7 +158,7 @@ export default function App() {
     // Full-Bleed 骨架:零 padding / 零 gap / 零圆角
     <div className="h-screen w-screen flex">
       {/* 左栏:固定 300px,自带右边框作硬朗分割线 */}
-      <div className="w-[300px] flex-shrink-0 h-full border-r border-white/5">
+      <div className="w-[300px] flex-shrink-0 h-full border-r border-[#262B37]">
         <Sidebar
           repoPath={repoPath}
           files={files}

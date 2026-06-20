@@ -118,14 +118,14 @@ export default function DiffPanel({ repoPath, filePath, refreshKey }: DiffPanelP
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-full text-ink-muted">
+      <div className="flex items-center justify-center h-full bg-[#0A0D14] text-ink-muted">
         加载中...
       </div>
     );
   }
   if (error) {
     return (
-      <div className="flex items-center justify-center h-full text-neon-red p-4">
+      <div className="flex items-center justify-center h-full bg-[#0A0D14] text-neon-red p-4">
         <div className="text-center">
           <div className="text-lg mb-2">❌ 错误</div>
           <div className="text-sm font-mono">{error}</div>
@@ -142,7 +142,7 @@ export default function DiffPanel({ repoPath, filePath, refreshKey }: DiffPanelP
     diffData.lang === null;
   if (isBinary) {
     return (
-      <div className="flex items-center justify-center h-full text-ink-muted">
+      <div className="flex items-center justify-center h-full bg-[#0A0D14] text-ink-muted">
         <div className="text-center">
           <div className="text-4xl mb-2 opacity-50">📦</div>
           <div>暂不支持二进制文件预览</div>
@@ -177,16 +177,16 @@ export default function DiffPanel({ repoPath, filePath, refreshKey }: DiffPanelP
   const isUntracked = diffData.old_content === "";
   if (!hasHunk || !diffString) {
     return (
-      <div className="flex items-center justify-center h-full text-ink-muted p-4 text-sm">
+      <div className="flex items-center justify-center h-full bg-[#0A0D14] text-ink-muted p-4 text-sm">
         {isUntracked ? "新文件,无历史版本" : "文件无变更"}
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full bg-[#0A0D14]">
       {/* 顶部工具栏:工业紧凑,纯 Tailwind 工具类,无 gel-box 阴影 */}
-      <div className="px-4 py-2 flex items-center justify-between flex-shrink-0 border-b border-white/5">
+      <div className="px-4 py-2 flex items-center justify-between flex-shrink-0 border-b border-[#262B37]">
         <div
           className="text-sm font-bold text-ink-base truncate flex-1 min-w-0 font-mono"
           title={filePath}
@@ -204,9 +204,9 @@ export default function DiffPanel({ repoPath, filePath, refreshKey }: DiffPanelP
             style={
               mode === DiffModeEnum.SplitGitHub
                 ? {
-                    background: "rgba(255,255,255,0.06)",
+                    background: "#202430",
                     boxShadow:
-                      "inset 0 0 0 1px rgba(255,255,255,0.10), 0 2px 8px rgba(0,0,0,0.4)",
+                      "inset 0 0 0 1px rgba(255,255,255,0.12), 0 2px 8px rgba(0,0,0,0.4)",
                   }
                 : undefined
             }
@@ -223,9 +223,9 @@ export default function DiffPanel({ repoPath, filePath, refreshKey }: DiffPanelP
             style={
               mode === DiffModeEnum.Unified
                 ? {
-                    background: "rgba(255,255,255,0.06)",
+                    background: "#202430",
                     boxShadow:
-                      "inset 0 0 0 1px rgba(255,255,255,0.10), 0 2px 8px rgba(0,0,0,0.4)",
+                      "inset 0 0 0 1px rgba(255,255,255,0.12), 0 2px 8px rgba(0,0,0,0.4)",
                   }
                 : undefined
             }

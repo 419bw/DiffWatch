@@ -109,9 +109,9 @@ const Field = ({
       value={value}
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
-      className="flex-1 min-w-0 bg-[#0B0F17]/60 border border-white/10 rounded
+      className="flex-1 min-w-0 bg-[#202430] border border-[#262B37] rounded
                  px-2 py-1 text-[11px] font-mono text-ink-base
-                 placeholder:text-ink-muted focus:outline-none focus:border-white/20"
+                 placeholder:text-ink-muted focus:outline-none focus:border-[#3A4050]"
     />
   </div>
 );
@@ -381,8 +381,8 @@ export default function Sidebar({
   };
 
   return (
-    // Sidebar 外壳:h-full flex flex-col,父容器已带 border-r border-white/5
-    <aside className="h-full flex flex-col bg-[#0B0F17]/40">
+    // Sidebar 外壳:h-full flex flex-col,父容器已带 border-r border-[#262B37]
+    <aside className="h-full flex flex-col bg-[#161920]">
       {/* === 顶部按钮行:横向并排,无图标,纯文字,gel-box 黑冰质感 === */}
       <div className="flex flex-row w-full gap-2 px-4 pt-4 pb-3">
         <button
@@ -437,7 +437,7 @@ export default function Sidebar({
       </div>
 
       {/* === 双选项卡:CHANGES / STAGED === */}
-      <div className="flex border-t border-white/5 flex-shrink-0">
+      <div className="flex border-t border-[#262B37] flex-shrink-0">
         <button
           onClick={() => setActiveTab("changes")}
           className={`flex-1 py-1.5 text-[11px] font-semibold uppercase tracking-wider transition-colors ${
@@ -483,11 +483,11 @@ export default function Sidebar({
                   <li
                     key={f.path}
                     onClick={() => onSelectFile(f.path)}
-                    className={`group flex items-center h-6 px-2 text-[12px] font-mono rounded-sm cursor-pointer
+                    className={`group flex items-center h-[26px] px-2 text-[12px] font-mono rounded-sm cursor-pointer
                       ${
                         isSelected
-                          ? "bg-white/[0.06] text-white"
-                          : "text-ink-base hover:text-white hover:bg-white/[0.03]"
+                          ? "bg-[#202430] text-white"
+                          : "text-zinc-400 hover:text-white hover:bg-white/[0.03]"
                       }`}
                     title={f.path}
                   >
@@ -545,11 +545,11 @@ export default function Sidebar({
                 <li
                   key={f.path}
                   onClick={() => onSelectFile(f.path)}
-                  className={`group flex items-center h-6 px-2 text-[12px] font-mono rounded-sm cursor-pointer
+                  className={`group flex items-center h-[26px] px-2 text-[12px] font-mono rounded-sm cursor-pointer
                     ${
                       isSelected
-                        ? "bg-white/[0.06] text-white"
-                        : "text-ink-base hover:text-white hover:bg-white/[0.03]"
+                        ? "bg-[#202430] text-white"
+                        : "text-zinc-400 hover:text-white hover:bg-white/[0.03]"
                     }`}
                   title={f.path}
                 >
@@ -588,8 +588,8 @@ export default function Sidebar({
         {showSettings && (
           <div
             className="absolute bottom-full left-0 w-full z-10
-                       bg-[#0B0F17]/95 backdrop-blur-sm
-                       border-t border-white/5 p-3
+                       bg-[#161920]
+                       border-t border-[#262B37] p-3
                        flex flex-col gap-2 shadow-lg"
           >
             <Field
@@ -615,7 +615,7 @@ export default function Sidebar({
           </div>
         )}
 
-        <div className="flex flex-row items-end gap-2 p-2 pb-2 border-t border-white/5">
+        <div className="flex flex-row items-end gap-2 p-2 pb-2 border-t border-[#262B37]">
           <button
             onClick={() => setShowSettings((s) => !s)}
             title="AI 设置"
@@ -623,7 +623,7 @@ export default function Sidebar({
                        transition-colors
                        ${
                          showSettings
-                           ? "text-emerald-400 bg-white/[0.06]"
+                           ? "text-emerald-400 bg-[#202430]"
                            : "text-ink-muted hover:text-white"
                        }`}
           >
@@ -645,9 +645,9 @@ export default function Sidebar({
               }}
               placeholder="输入 commit 信息,或点 ✦ AI 生成 (Ctrl+Enter 提交)"
               disabled={committing}
-              className="w-full bg-[#0B0F17]/60 border border-white/10 rounded-md
+              className="w-full bg-[#202430] border border-[#262B37] rounded-md
                          pl-2 pr-8 py-1 text-[12px] font-mono text-ink-base leading-tight
-                         placeholder:text-ink-muted focus:outline-none focus:border-white/20
+                         placeholder:text-ink-muted focus:outline-none focus:border-[#3A4050]
                          disabled:opacity-50 resize-none
                          min-h-[32px] max-h-[140px] overflow-y-auto"
             />
@@ -697,23 +697,28 @@ function TreeNodeView({
 }) {
   // 文件夹 + 文件节点都查:map 里既有祖先文件夹也有文件自身
   const bubble = dirtyNodes.get(node.path);
+  // 文字分层:dirty > clean;clean 内再分 文件夹(text-zinc-200 + font-medium) / 文件(text-zinc-400)
   const baseText =
     bubble === "modified"
       ? "text-emerald-500/80"
       : bubble === "untracked"
       ? "text-amber-500/80"
-      : "text-ink-base";
+      : node.is_dir
+      ? "text-zinc-200 font-medium"
+      : "text-zinc-400";
   const hoverText =
     bubble === "modified"
       ? "hover:text-emerald-400"
       : bubble === "untracked"
       ? "hover:text-amber-400"
-      : "hover:text-white";
+      : node.is_dir
+      ? "hover:text-white"
+      : "hover:text-zinc-200";
 
   return (
     <div>
       <div
-        className={`flex items-center h-5 text-[12px] font-mono ${baseText} ${hoverText} cursor-pointer`}
+        className={`flex items-center h-[26px] text-[12px] font-mono rounded-sm hover:bg-white/[0.03] ${baseText} ${hoverText} cursor-pointer`}
         style={{ paddingLeft: 8 + depth * 16 }}
         onClick={node.is_dir ? () => onToggle(node.path) : undefined}
         title={node.path}
@@ -742,7 +747,7 @@ function SectionHeader({ label }: { label: string }) {
   return (
     <div
       className="px-4 py-1.5 text-[11px] font-semibold tracking-wider uppercase
-                 text-gray-500 border-t border-white/5 flex-shrink-0"
+                 text-gray-500 border-t border-[#262B37] flex-shrink-0"
     >
       {label}
     </div>
