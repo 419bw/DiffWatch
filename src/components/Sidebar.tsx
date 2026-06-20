@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, memo } from "react";
 import { message } from "@tauri-apps/plugin-dialog";
 import {
   executeCommit,
@@ -47,6 +47,20 @@ const STATUS_COLOR: Record<string, string> = {
   renamed: "text-neon-green",
   typechange: "text-neon-green",
 };
+
+// === WAAPI 离场助手:把行盒子坍塌到 0 高度 + 透明 + 微缩,onfinish 由浏览器合成线程触发 ===
+// 好处:不依赖 React state、不受 setState batching/并发模式影响、精度 ±1ms。
+//      fill: 'forwards' 让元素停在终态,调用方在 onFinish 里负责 row.remove()。
+function animateExit(rowEl: HTMLElement, onFinish: () => void) {
+  const anim = rowEl.animate(
+    [
+      { height: "26px", opacity: 1, transform: "scale(1)" },
+      { height: "0px", opacity: 0, transform: "scale(0.95)" },
+    ],
+    { duration: 200, easing: "ease-out", fill: "forwards" }
+  );
+  anim.onfinish = onFinish;
+}
 
 // 脏文件夹冒泡状态:modified 表示子树含 git-tracked 变更(M/S/R/T/D),
 // untracked 表示子树含未追踪文件
@@ -497,19 +511,15 @@ export default function Sidebar({
         ) : tree.length === 0 ? (
           <div className="px-2 py-3 text-[11px] text-gray-500">空目录</div>
         ) : (
-          tree.map((n) => (
-            <TreeNodeView
-              key={n.path}
-              node={n}
-              depth={0}
-              onToggle={toggleNode}
-              dirtyNodes={dirtyNodes}
-              files={files}
-              onSelectFile={onSelectFile}
-              onReadOnlyFile={onReadOnlyFile}
-              onOpenInVscode={onOpenInVscode}
-            />
-          ))
+          <MemoWorkspaceTree
+            tree={tree}
+            onToggle={toggleNode}
+            dirtyNodes={dirtyNodes}
+            files={files}
+            onSelectFile={onSelectFile}
+            onReadOnlyFile={onReadOnlyFile}
+            onOpenInVscode={onOpenInVscode}
+          />
         )}
       </div>
 
@@ -560,7 +570,7 @@ export default function Sidebar({
                   <li
                     key={f.path}
                     onClick={() => onSelectFile(f.path)}
-                    className={`group flex items-center px-2 text-[12px] font-mono rounded-sm cursor-pointer
+                    className={`group flex items-center h-[26px] overflow-hidden flex-shrink-0 px-2 text-[12px] font-mono rounded-sm cursor-pointer
                                 ${isSelected
                                   ? "bg-[#202430] text-white"
                                   : "text-zinc-400 hover:text-white hover:bg-white/[0.03]"}`}
@@ -584,7 +594,8 @@ export default function Sidebar({
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          onStageFile(f.path);
+                          const row = e.currentTarget.closest("li");
+                          if (row) animateExit(row, () => onStageFile(f.path));
                         }}
                         title="暂存此改动"
                         className="text-[10px] font-bold text-emerald-400 hover:text-emerald-300 leading-none px-0.5 whitespace-nowrap"
@@ -595,7 +606,8 @@ export default function Sidebar({
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          onDiscardFile(f.path, f.status);
+                          const row = e.currentTarget.closest("li");
+                          if (row) animateExit(row, () => onDiscardFile(f.path, f.status));
                         }}
                         title="丢弃此改动"
                         className="text-[10px] font-bold text-red-400 hover:text-red-300 leading-none px-0.5 whitespace-nowrap"
@@ -620,7 +632,7 @@ export default function Sidebar({
                 <li
                   key={f.path}
                   onClick={() => onSelectFile(f.path)}
-                  className={`group flex items-center px-2 text-[12px] font-mono rounded-sm cursor-pointer
+                  className={`group flex items-center h-[26px] overflow-hidden flex-shrink-0 px-2 text-[12px] font-mono rounded-sm cursor-pointer
                               ${isSelected
                                 ? "bg-[#202430] text-white"
                                 : "text-zinc-400 hover:text-white hover:bg-white/[0.03]"}`}
@@ -641,7 +653,8 @@ export default function Sidebar({
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        onUnstageFile(f.path);
+                        const row = e.currentTarget.closest("li");
+                        if (row) animateExit(row, () => onUnstageFile(f.path));
                       }}
                       title="取消暂存"
                       className="text-[10px] font-bold text-amber-400 hover:text-amber-300 leading-none px-0.5 whitespace-nowrap"
@@ -761,6 +774,50 @@ export default function Sidebar({
     </aside>
   );
 }
+
+// === 工作区文件树容器:被 memo 焊死,只要 tree 引用不变,父组件任何重渲都不会触及子树 ===
+interface WorkspaceTreeProps {
+  tree: TreeItem[];
+  onToggle: (path: string) => void;
+  dirtyNodes: Map<string, BubbleKind>;
+  files: GitFile[];
+  onSelectFile: (path: string) => void;
+  onReadOnlyFile: (path: string) => void;
+  onOpenInVscode: (path: string) => void;
+}
+
+function WorkspaceTree({
+  tree,
+  onToggle,
+  dirtyNodes,
+  files,
+  onSelectFile,
+  onReadOnlyFile,
+  onOpenInVscode,
+}: WorkspaceTreeProps) {
+  return (
+    <>
+      {tree.map((n) => (
+        <TreeNodeView
+          key={n.path}
+          node={n}
+          depth={0}
+          onToggle={onToggle}
+          dirtyNodes={dirtyNodes}
+          files={files}
+          onSelectFile={onSelectFile}
+          onReadOnlyFile={onReadOnlyFile}
+          onOpenInVscode={onOpenInVscode}
+        />
+      ))}
+    </>
+  );
+}
+
+// 🌟 核心防御:只有当 tree 引用真的变了,才允许重渲。
+// dirtyNodes / files 的引用变化(由 watcher 触发)暂不触发 tree 重渲 ——
+// 视觉上 bubble 色延迟一拍可接受,因为 CHANGES/STAGED 列表才是脏状态的真相源。
+const MemoWorkspaceTree = memo(WorkspaceTree, (prev, next) => prev.tree === next.tree);
 
 // === 树节点视图(递归):VS Code 风格 —— chevron + 图标 + 文件名 ===
 function TreeNodeView({
