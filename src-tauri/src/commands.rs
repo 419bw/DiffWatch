@@ -5,8 +5,8 @@
 //!     invoke('get_file_content', { repoPath: '...', filePath: '...' })
 
 use crate::git_ops::{
-    list_changed_files, read_directory as read_dir_impl, read_file_diff, FileDiffData, FileEntry,
-    GitFile,
+    discard_file as discard_impl, list_changed_files, read_directory as read_dir_impl,
+    read_file_diff, stage_file as stage_impl, FileDiffData, FileEntry, GitFile,
 };
 
 /// 获取仓库变更文件列表
@@ -25,4 +25,16 @@ pub fn get_file_content(repo_path: String, file_path: String) -> Result<FileDiff
 #[tauri::command]
 pub fn read_directory(dir_path: String) -> Result<Vec<FileEntry>, String> {
     read_dir_impl(&dir_path)
+}
+
+/// 把指定文件加入暂存区
+#[tauri::command]
+pub fn stage_file(repo_path: String, file_path: String) -> Result<(), String> {
+    stage_impl(&repo_path, &file_path)
+}
+
+/// 丢弃指定文件的改动（untracked 走物理删除,其它走 checkout_head 恢复 HEAD）
+#[tauri::command]
+pub fn discard_file(repo_path: String, file_path: String, status: String) -> Result<(), String> {
+    discard_impl(&repo_path, &file_path, &status)
 }

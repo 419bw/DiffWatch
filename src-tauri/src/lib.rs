@@ -14,6 +14,8 @@ pub fn run() {
             commands::get_git_status,
             commands::get_file_content,
             commands::read_directory,
+            commands::stage_file,
+            commands::discard_file,
             watcher::start_watching,
             watcher::stop_watching,
         ])

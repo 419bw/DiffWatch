@@ -90,6 +90,51 @@ pub fn list_changed_files(repo_path: &str) -> Result<Vec<GitFile>, String> {
     Ok(out)
 }
 
+/// 把指定文件写入暂存区（index）。
+///
+/// 用 git2 的 `Index::add_path` + `Index::write` 完成,跨平台走 git2 内部路径处理。
+/// file_path 前端传来是 POSIX "/" 风格,git2 会做平台转换。
+pub fn stage_file(repo_path: &str, file_path: &str) -> Result<(), String> {
+    let repo = Repository::open(repo_path).map_err(|e| format!("打开仓库失败: {e}"))?;
+    let mut index = repo.index().map_err(|e| format!("读取索引失败: {e}"))?;
+    index
+        .add_path(Path::new(file_path))
+        .map_err(|e| format!("暂存失败: {e}"))?;
+    index.write().map_err(|e| format!("写入索引失败: {e}"))?;
+    Ok(())
+}
+
+/// 丢弃指定文件的改动,根据 status 走不同路径。
+///
+/// - `untracked`：物理删除(目录走 `remove_dir_all`,文件走 `remove_file`)
+/// - 其它 git-tracked 状态(modified / staged / deleted / renamed / typechange)：
+///   用 `CheckoutBuilder::path()` 精准锁定单文件,`force` 模式从 HEAD 恢复
+///   —— 绝不会误伤工作区其他文件
+pub fn discard_file(repo_path: &str, file_path: &str, status: &str) -> Result<(), String> {
+    let repo = Repository::open(repo_path).map_err(|e| format!("打开仓库失败: {e}"))?;
+
+    match status {
+        "untracked" => {
+            let full = Path::new(repo_path).join(file_path);
+            if full.is_dir() {
+                fs::remove_dir_all(&full).map_err(|e| format!("删除目录失败: {e}"))?;
+            } else {
+                fs::remove_file(&full).map_err(|e| format!("删除文件失败: {e}"))?;
+            }
+            Ok(())
+        }
+        "modified" | "staged" | "deleted" | "renamed" | "typechange" => {
+            let mut opts = git2::build::CheckoutBuilder::new();
+            opts.force();
+            opts.path(Path::new(file_path)); // 🚨 精准锁定单文件
+            repo.checkout_head(Some(&mut opts))
+                .map_err(|e| format!("恢复 HEAD 失败: {e}"))?;
+            Ok(())
+        }
+        _ => Err(format!("未知状态: {status}")),
+    }
+}
+
 /// 读取指定文件在 HEAD 与工作区之间的内容对
 ///
 /// - HEAD 不存在（unborn）→ 旧内容空字符串

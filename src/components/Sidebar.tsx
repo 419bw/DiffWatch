@@ -9,6 +9,8 @@ interface SidebarProps {
   onSelectRepo: (path: string) => void;
   onSelectFile: (path: string) => void;
   onRefresh: () => void;
+  onStageFile: (path: string) => void;
+  onDiscardFile: (path: string, status: string) => void;
   loading: boolean;
 }
 
@@ -50,6 +52,8 @@ export default function Sidebar({
   onSelectRepo,
   onSelectFile,
   onRefresh,
+  onStageFile,
+  onDiscardFile,
   loading,
 }: SidebarProps) {
   const [picking, setPicking] = useState(false);
@@ -256,7 +260,7 @@ export default function Sidebar({
                 <li
                   key={f.path}
                   onClick={() => onSelectFile(f.path)}
-                  className={`flex items-center h-6 px-2 text-[12px] font-mono rounded-sm cursor-pointer
+                  className={`group relative flex items-center h-6 px-2 text-[12px] font-mono rounded-sm cursor-pointer
                     ${
                       isSelected
                         ? "bg-white/[0.06] text-white"
@@ -265,13 +269,41 @@ export default function Sidebar({
                   title={f.path}
                 >
                   <span className="truncate flex-1">{f.path}</span>
+
+                  {/* 默认状态字母 — hover 时淡出 */}
                   <span
-                    className={`ml-2 text-[10px] font-bold w-3 text-center ${
+                    className={`ml-2 text-[10px] font-bold w-3 text-center transition-opacity duration-75
+                      group-hover:opacity-0 ${
                       STATUS_COLOR[f.status] ?? "text-ink-muted"
                     }`}
                   >
                     {STATUS_LETTER[f.status] ?? "?"}
                   </span>
+
+                  {/* Hover 动作条 — absolute 浮在状态字母上方 */}
+                  <div className="absolute right-2 flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-75 pointer-events-none group-hover:pointer-events-auto">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onStageFile(f.path);
+                      }}
+                      title="暂存此改动"
+                      className="text-[10px] font-bold text-emerald-400 hover:text-emerald-300 leading-none px-0.5"
+                    >
+                      ✓ Stage
+                    </button>
+                    <span className="text-ink-muted/40 text-[10px]">|</span>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDiscardFile(f.path, f.status);
+                      }}
+                      title="丢弃此改动"
+                      className="text-[10px] font-bold text-red-400 hover:text-red-300 leading-none px-0.5"
+                    >
+                      ✕ Discard
+                    </button>
+                  </div>
                 </li>
               );
             })}

@@ -4,7 +4,10 @@ import Sidebar from "./components/Sidebar";
 import DiffPanel from "./components/DiffPanel";
 import EmptyState from "./components/EmptyState";
 import {
+  confirmDiscard,
+  discardFile,
   getGitStatus,
+  stageFile,
   startWatching,
   stopWatching,
 } from "./lib/tauri";
@@ -43,6 +46,39 @@ export default function App() {
     setSelectedFile(null);
     refresh(path);
   };
+
+  // === Stage / Discard 操作闭环 ===
+  // 手动 refresh() 是立即的兜底,watcher 的 repo-changed 几百毫秒后也会再触发一次,
+  // 两次拉取无害(React 引用未变则跳过 re-render)
+  const handleStageFile = useCallback(
+    async (filePath: string) => {
+      if (!repoPath) return;
+      try {
+        await stageFile(repoPath, filePath);
+        refresh();
+      } catch (e) {
+        console.error("stage 失败", e);
+      }
+    },
+    [repoPath, refresh]
+  );
+
+  const handleDiscardFile = useCallback(
+    async (filePath: string, status: string) => {
+      if (!repoPath) return;
+      const yes = await confirmDiscard(filePath);
+      if (!yes) return;
+      try {
+        await discardFile(repoPath, filePath, status);
+        // 丢弃的是当前正在看的文件 → 清空选择(否则 DiffPanel 会去拉不存在的文件)
+        setSelectedFile((cur) => (cur === filePath ? null : cur));
+        refresh();
+      } catch (e) {
+        console.error("discard 失败", e);
+      }
+    },
+    [repoPath, refresh]
+  );
 
   // === repoPath 变化时,启停 watchdog ===
   useEffect(() => {
@@ -109,6 +145,8 @@ export default function App() {
           onSelectRepo={handleSelectRepo}
           onSelectFile={setSelectedFile}
           onRefresh={() => refresh()}
+          onStageFile={handleStageFile}
+          onDiscardFile={handleDiscardFile}
           loading={loading}
         />
       </div>
