@@ -615,22 +615,13 @@ export default function Sidebar({
           </div>
         )}
 
-        <div className="flex flex-row items-end gap-2 p-2 pb-2 border-t border-[#262B37]">
-          <button
-            onClick={() => setShowSettings((s) => !s)}
-            title="AI 设置"
-            className={`flex-shrink-0 w-6 h-6 flex items-center justify-center rounded
-                       transition-colors
-                       ${
-                         showSettings
-                           ? "text-emerald-400 bg-[#202430]"
-                           : "text-ink-muted hover:text-white"
-                       }`}
-          >
-            <GearIcon />
-          </button>
+        {/* 外凹槽:刻意比侧栏壳 #161920 更暗一档,营造凹陷轨道 */}
+        <div className="p-2 border-t border-[#262B37] bg-[#13161C]">
+          {/* 内卡:聚焦色 #1C1F26,浮于外凹槽之上 */}
+          <div className="flex flex-col w-full bg-[#1C1F26] border border-[#262B37] rounded-md p-2
+                          focus-within:border-zinc-700 transition-colors">
 
-          <div className="relative flex-1">
+            {/* 顶层:纯净 textarea —— 边框/bg 全由内卡提供 */}
             <textarea
               ref={textareaRef}
               rows={1}
@@ -643,40 +634,52 @@ export default function Sidebar({
                   handleCommit();
                 }
               }}
-              placeholder="输入 commit 信息,或点 ✦ AI 生成 (Ctrl+Enter 提交)"
+              placeholder="Commit message (Ctrl+Enter)..."
+              title="输入 commit 信息,或点 ✦ AI 生成 (Ctrl+Enter 提交)"
               disabled={committing}
-              className="w-full bg-[#202430] border border-[#262B37] rounded-md
-                         pl-2 pr-8 py-1 text-[12px] font-mono text-ink-base leading-tight
-                         placeholder:text-ink-muted focus:outline-none focus:border-[#3A4050]
-                         disabled:opacity-50 resize-none
-                         min-h-[32px] max-h-[140px] overflow-y-auto"
+              className="w-full bg-transparent resize-none outline-none
+                         text-[12px] font-mono text-ink-base
+                         placeholder:text-gray-600 disabled:opacity-50
+                         min-h-[24px] max-h-[120px] overflow-y-auto"
             />
-            {commitMessage === "" && !aiLoading && (
-              <button
-                onClick={handleAiGenerate}
-                title="AI 生成 commit 信息"
-                className="absolute right-2 top-2
-                           text-ink-muted hover:text-emerald-400 transition-colors"
-              >
-                <SparklesIcon />
-              </button>
-            )}
-            {aiLoading && (
-              <div className="absolute right-2 top-2 text-ink-muted">
-                <LoadingDots />
-              </div>
-            )}
-          </div>
 
-          <button
-            onClick={handleCommit}
-            disabled={committing || !commitMessage.trim() || stagedFiles.length === 0}
-            className="gel-box rounded-md px-3 py-1 text-xs font-bold text-ink-base
-                       hover:text-white transition-colors disabled:opacity-40
-                       flex-shrink-0"
-          >
-            {committing ? "提交中…" : "Commit"}
-          </button>
+            {/* 底层:内嵌工具栏 —— 纳米级分隔 (2% 白) */}
+            <div className="flex items-center justify-between mt-1.5 pt-1.5 border-t border-white/[0.02]">
+              {/* 左槽:齿轮 + AI 生成 / LoadingDots */}
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={() => setShowSettings((s) => !s)}
+                  title="AI 设置"
+                  className="text-gray-500 hover:text-white transition-colors"
+                >
+                  <GearIcon />
+                </button>
+                {commitMessage === "" && !aiLoading && (
+                  <button
+                    onClick={handleAiGenerate}
+                    title="AI 生成 commit 信息"
+                    className="text-[11px] font-medium text-gray-500 hover:text-emerald-400
+                               transition-colors flex items-center gap-0.5"
+                  >
+                    <SparklesIcon />
+                    AI 生成
+                  </button>
+                )}
+                {aiLoading && <LoadingDots />}
+              </div>
+
+              {/* 右槽:Commit 主操作 */}
+              <button
+                onClick={handleCommit}
+                disabled={committing || !commitMessage.trim() || stagedFiles.length === 0}
+                className="bg-emerald-600/80 hover:bg-emerald-500 disabled:opacity-30
+                           text-white rounded px-2.5 py-0.5 text-[11px] font-semibold
+                           transition-colors"
+              >
+                {committing ? "提交中…" : "Commit"}
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </aside>
