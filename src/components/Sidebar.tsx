@@ -186,6 +186,15 @@ export default function Sidebar({
   // 用于 API Key 空时自动聚焦
   const apiKeyInputRef = useRef<HTMLInputElement>(null);
 
+  // textarea 自适应高度:auto-glow 的标准两步法
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = "auto"; // 先归零让浏览器算自然 scrollHeight
+    el.style.height = `${el.scrollHeight}px`; // 再赋值为内容高度(超出被 max-h 截断)
+  }, [commitMessage]);
+
   const handleAiGenerate = async () => {
     if (!repoPath || aiLoading) return;
     // 🔒 防错拦截:API Key 为空时直接弹设置面板并聚焦 Key 输入框
@@ -606,7 +615,7 @@ export default function Sidebar({
           </div>
         )}
 
-        <div className="flex flex-row items-center gap-2 p-2 border-t border-white/5">
+        <div className="flex flex-row items-end gap-2 p-2 pb-2 border-t border-white/5">
           <button
             onClick={() => setShowSettings((s) => !s)}
             title="AI 设置"
@@ -622,35 +631,38 @@ export default function Sidebar({
           </button>
 
           <div className="relative flex-1">
-            <input
-              type="text"
+            <textarea
+              ref={textareaRef}
+              rows={1}
               value={commitMessage}
               onChange={(e) => setCommitMessage(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
+                // textarea 下 Enter 换行;只有 Ctrl/Cmd+Enter 提交
+                if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
                   e.preventDefault();
                   handleCommit();
                 }
               }}
-              placeholder="输入 commit 信息,或点 ✦ AI 生成"
+              placeholder="输入 commit 信息,或点 ✦ AI 生成 (Ctrl+Enter 提交)"
               disabled={committing}
               className="w-full bg-[#0B0F17]/60 border border-white/10 rounded-md
-                         pl-2 pr-8 py-1 text-[12px] font-mono text-ink-base
+                         pl-2 pr-8 py-1 text-[12px] font-mono text-ink-base leading-tight
                          placeholder:text-ink-muted focus:outline-none focus:border-white/20
-                         disabled:opacity-50"
+                         disabled:opacity-50 resize-none
+                         min-h-[32px] max-h-[140px] overflow-y-auto"
             />
             {commitMessage === "" && !aiLoading && (
               <button
                 onClick={handleAiGenerate}
                 title="AI 生成 commit 信息"
-                className="absolute right-2 top-1/2 -translate-y-1/2
+                className="absolute right-2 top-2
                            text-ink-muted hover:text-emerald-400 transition-colors"
               >
                 <SparklesIcon />
               </button>
             )}
             {aiLoading && (
-              <div className="absolute right-2 top-1/2 -translate-y-1/2 text-ink-muted">
+              <div className="absolute right-2 top-2 text-ink-muted">
                 <LoadingDots />
               </div>
             )}
