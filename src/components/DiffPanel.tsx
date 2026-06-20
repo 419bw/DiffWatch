@@ -185,7 +185,7 @@ export default function DiffPanel({ repoPath, filePath, refreshKey }: DiffPanelP
 
   return (
     <div className="flex flex-col h-full bg-[#0A0D14]">
-      {/* 顶部工具栏:工业紧凑,纯 Tailwind 工具类,无 gel-box 阴影 */}
+      {/* 顶部工具栏:工业紧凑,纯 Tailwind 工具类 + Segmented Control */}
       <div className="px-4 py-2 flex items-center justify-between flex-shrink-0 border-b border-[#262B37]">
         <div
           className="text-sm font-bold text-ink-base truncate flex-1 min-w-0 font-mono"
@@ -193,42 +193,25 @@ export default function DiffPanel({ repoPath, filePath, refreshKey }: DiffPanelP
         >
           {filePath}
         </div>
-        <div className="flex gap-1 flex-shrink-0">
+        <div className="flex bg-[#13161C] border border-[#262B37] rounded-sm
+                       p-0.5 flex-shrink-0 items-center">
           <button
             onClick={() => setMode(DiffModeEnum.SplitGitHub)}
-            className={`gel-box rounded-xl px-3 py-1 text-xs font-bold transition-colors ${
+            className={`px-2 py-0.5 text-[11px] font-medium rounded-sm transition-colors ${
               mode === DiffModeEnum.SplitGitHub
-                ? "text-white"
-                : "text-ink-muted hover:text-white"
+                ? "bg-[#1C1F26] text-white shadow-sm"
+                : "text-gray-500 hover:text-zinc-300"
             }`}
-            style={
-              mode === DiffModeEnum.SplitGitHub
-                ? {
-                    background: "#202430",
-                    boxShadow:
-                      "inset 0 0 0 1px rgba(255,255,255,0.12), 0 2px 8px rgba(0,0,0,0.4)",
-                  }
-                : undefined
-            }
           >
             Split
           </button>
           <button
             onClick={() => setMode(DiffModeEnum.Unified)}
-            className={`gel-box rounded-xl px-3 py-1 text-xs font-bold transition-colors ${
+            className={`px-2 py-0.5 text-[11px] font-medium rounded-sm transition-colors ${
               mode === DiffModeEnum.Unified
-                ? "text-white"
-                : "text-ink-muted hover:text-white"
+                ? "bg-[#1C1F26] text-white shadow-sm"
+                : "text-gray-500 hover:text-zinc-300"
             }`}
-            style={
-              mode === DiffModeEnum.Unified
-                ? {
-                    background: "#202430",
-                    boxShadow:
-                      "inset 0 0 0 1px rgba(255,255,255,0.12), 0 2px 8px rgba(0,0,0,0.4)",
-                  }
-                : undefined
-            }
           >
             Unified
           </button>

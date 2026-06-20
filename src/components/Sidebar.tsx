@@ -70,6 +70,21 @@ const SparklesIcon = () => (
   </svg>
 );
 
+// 极简刷新图标 12×12 —— 沿用 GearIcon 风格规范;支持 className 传入 animate-spin
+const RefreshIcon = ({ className = "" }: { className?: string }) => (
+  <svg
+    width="12" height="12" viewBox="0 0 24 24" fill="none"
+    stroke="currentColor" strokeWidth="2"
+    strokeLinecap="round" strokeLinejoin="round"
+    className={className}
+  >
+    <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+    <path d="M21 3v5h-5" />
+    <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
+    <path d="M8 16H3v5" />
+  </svg>
+);
+
 // AI 加载三点动画
 const LoadingDots = () => (
   <span className="inline-flex gap-0.5">
@@ -383,25 +398,25 @@ export default function Sidebar({
   return (
     // Sidebar 外壳:h-full flex flex-col,父容器已带 border-r border-[#262B37]
     <aside className="h-full flex flex-col bg-[#161920]">
-      {/* === 顶部按钮行:横向并排,无图标,纯文字,gel-box 黑冰质感 === */}
-      <div className="flex flex-row w-full gap-2 px-4 pt-4 pb-3">
+      {/* === 顶部 36px 紧凑工具轨 —— 选择仓库 + 刷新,微差色层与底部 commit 太空舱对称 === */}
+      <div className="flex items-center justify-between h-9 px-3 border-b border-[#262B37] flex-shrink-0">
         <button
           onClick={handlePickRepo}
           disabled={picking}
-          className="gel-box rounded-xl flex-1 h-8 text-xs font-bold text-ink-base
-                     flex items-center justify-center disabled:opacity-50
-                     hover:text-white transition-colors"
+          className="bg-[#1C1F26] border border-[#262B37] text-[11px] text-zinc-300
+                     hover:text-white px-2 py-0.5 rounded transition-colors
+                     disabled:opacity-50"
         >
           {picking ? "选择中…" : "选择仓库"}
         </button>
         <button
           onClick={onRefresh}
           disabled={!repoPath || loading}
-          className="gel-box rounded-xl flex-1 h-8 text-xs font-bold text-ink-base
-                     flex items-center justify-center disabled:opacity-40
-                     hover:text-white transition-colors"
+          title="刷新"
+          className="w-6 h-6 flex items-center justify-center text-zinc-300
+                     hover:text-white disabled:opacity-30 rounded transition-colors"
         >
-          {loading ? "刷新中…" : "刷新"}
+          <RefreshIcon className={loading ? "animate-spin" : ""} />
         </button>
       </div>
 
@@ -750,7 +765,7 @@ function SectionHeader({ label }: { label: string }) {
   return (
     <div
       className="px-4 py-1.5 text-[11px] font-semibold tracking-wider uppercase
-                 text-gray-500 border-t border-[#262B37] flex-shrink-0"
+                 text-gray-500 flex-shrink-0"
     >
       {label}
     </div>
