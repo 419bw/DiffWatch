@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, memo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { message } from "@tauri-apps/plugin-dialog";
 import {
   executeCommit,
@@ -209,6 +209,59 @@ const toTreeItems = (entries: FileEntry[]): TreeItem[] =>
     isLoaded: false,
   }));
 
+// === 收集所有"已展开 且 已加载"的文件夹节点(递归深入其 children) ===
+// 用于在 watcher 触发刷新时,精准定位需要重新扫描的目录
+const collectExpandedLoadedDirs = (nodes: TreeItem[]): TreeItem[] => {
+  const dirs: TreeItem[] = [];
+  const walk = (ns: TreeItem[]) => {
+    for (const n of ns) {
+      if (n.isOpen && n.isLoaded && n.children) {
+        dirs.push(n);
+        walk(n.children);
+      }
+    }
+  };
+  walk(nodes);
+  return dirs;
+};
+
+// === 用 fresh 作为"内容"真相源,递归合并到 prev,保留 isOpen/isLoaded/已加载子树 ===
+// - fresh 里有,prev 里也有 → 保留状态;若双方都有 children,继续递归合并
+// - fresh 里有,prev 里没有 → 新增,默认折叠未加载
+// - prev 里有,fresh 里没有 → 丢弃(文件/文件夹被删)
+//
+// freshMap:每个"已展开目录"的最新 children 内容,merge 时按路径查询递归展开
+const mergeTreeRecursive = (
+  prev: TreeItem[],
+  fresh: TreeItem[],
+  freshMap: Map<string, TreeItem[]>,
+): TreeItem[] => {
+  return fresh.map((fItem) => {
+    const prevItem = prev.find((p) => p.path === fItem.path);
+    if (!prevItem) return fItem;
+
+    const freshChildren = freshMap.get(fItem.path);
+    const prevChildren = prevItem.children;
+
+    if (freshChildren && prevChildren) {
+      return {
+        ...fItem,
+        isOpen: prevItem.isOpen,
+        isLoaded: prevItem.isLoaded,
+        children: mergeTreeRecursive(prevChildren, freshChildren, freshMap),
+      };
+    }
+
+    // 此目录没拿到 fresh 内容(不在 expanded 列表里) —— 保留 prev 的 children
+    return {
+      ...fItem,
+      isOpen: prevItem.isOpen,
+      isLoaded: prevItem.isLoaded,
+      children: prevChildren,
+    };
+  });
+};
+
 export default function Sidebar({
   repoPath,
   files,
@@ -228,6 +281,17 @@ export default function Sidebar({
   const [tree, setTree] = useState<TreeItem[]>([]);
   const [treeLoading, setTreeLoading] = useState(false);
   const [treeError, setTreeError] = useState<string | null>(null);
+
+  // 🌟 核心防御:treeRef 永远映射最新树结构,切断 useEffect 闭包陷阱 + 死循环
+  // - tree 不进 [repoPath, files] deps,避免 setTree → 自身重跑 → CPU 烧光
+  // - 读 tree 时走 treeRef.current,绕过闭包过期问题
+  const treeRef = useRef<TreeItem[]>(tree);
+  useEffect(() => {
+    treeRef.current = tree;
+  }, [tree]);
+
+  // 跟踪上次扫描的 repo —— 区分"repo 切换的初始加载"和"files 变化的刷新合并"
+  const lastScannedRepoRef = useRef<string | null>(null);
 
   // === AI Commit 栏 state ===
   const [commitMessage, setCommitMessage] = useState("");
@@ -359,37 +423,81 @@ export default function Sidebar({
     return map;
   }, [files, repoPath]);
 
-  // === 初始化流:repoPath 变化时,read_directory(repoPath) 拿根目录第一层 ===
-  useEffect(() => {
+  // === 树扫描流:repoPath 切换走初始加载(整树替换为 fresh);
+//                  files 变化走刷新(merge 保留展开状态) ===
+// 依赖数组刻意只有 [repoPath, files]:
+// - tree 不进 deps,避免 setTree → tree 变 → effect 重跑 → 死循环
+// - 读 tree 时走 treeRef.current,绕过闭包陷阱,拿到屏幕上的真值
+useEffect(() => {
     if (!repoPath) {
       setTree([]);
       setTreeError(null);
+      lastScannedRepoRef.current = null;
       return;
     }
+
+    const isRepoChange = lastScannedRepoRef.current !== repoPath;
     let cancelled = false;
-    setTreeLoading(true);
+
+    // 仅初始加载显示 loading,后台静默刷新不打扰用户
+    if (isRepoChange) setTreeLoading(true);
     setTreeError(null);
-    readDirectory(repoPath)
-      .then((entries) => {
-        if (!cancelled) {
-          setTree(toTreeItems(entries));
-          setTreeError(null);
+
+    (async () => {
+      try {
+        // 1. 根目录
+        const rootEntries = await readDirectory(repoPath);
+        if (cancelled) return;
+
+        // 2. 收集所有已展开+已加载的文件夹(从 treeRef 取,绝对最新)
+        const expandedDirs = collectExpandedLoadedDirs(treeRef.current);
+
+        // 3. 并发拉取这些文件夹的最新内容(失败的静默跳过,可能是被删了)
+        const dirResults = await Promise.all(
+          expandedDirs.map(async (dir) => {
+            try {
+              const entries = await readDirectory(dir.path);
+              return [dir.path, toTreeItems(entries)] as const;
+            } catch {
+              return null;
+            }
+          })
+        );
+        if (cancelled) return;
+
+        // 4. 构建 freshMap + 应用 merge / 替换
+        const freshMap = new Map<string, TreeItem[]>(
+          dirResults.filter(
+            (r): r is readonly [string, TreeItem[]] => r !== null
+          )
+        );
+
+        if (isRepoChange) {
+          // repo 切换:整树替换,丢掉旧状态
+          setTree(toTreeItems(rootEntries));
+        } else {
+          // files 触发刷新:merge 保留展开
+          setTree((prev) =>
+            mergeTreeRecursive(prev, toTreeItems(rootEntries), freshMap)
+          );
         }
-      })
-      .catch((e) => {
+        lastScannedRepoRef.current = repoPath;
+        setTreeError(null);
+      } catch (e) {
         console.error("readDirectory 失败", e);
         if (!cancelled) {
           setTree([]);
-          setTreeError(String(e?.message ?? e));
+          setTreeError(e instanceof Error ? e.message : String(e));
         }
-      })
-      .finally(() => {
+      } finally {
         if (!cancelled) setTreeLoading(false);
-      });
+      }
+    })();
+
     return () => {
       cancelled = true;
     };
-  }, [repoPath]);
+  }, [repoPath, files]);
 
   // === 按需加载流:点击文件夹 ===
   // - 若 isLoaded,只切 isOpen(秒开)
@@ -511,15 +619,21 @@ export default function Sidebar({
         ) : tree.length === 0 ? (
           <div className="px-2 py-3 text-[11px] text-gray-500">空目录</div>
         ) : (
-          <MemoWorkspaceTree
-            tree={tree}
-            onToggle={toggleNode}
-            dirtyNodes={dirtyNodes}
-            files={files}
-            onSelectFile={onSelectFile}
-            onReadOnlyFile={onReadOnlyFile}
-            onOpenInVscode={onOpenInVscode}
-          />
+          <>
+            {tree.map((n) => (
+              <TreeNodeView
+                key={n.path}
+                node={n}
+                depth={0}
+                onToggle={toggleNode}
+                dirtyNodes={dirtyNodes}
+                files={files}
+                onSelectFile={onSelectFile}
+                onReadOnlyFile={onReadOnlyFile}
+                onOpenInVscode={onOpenInVscode}
+              />
+            ))}
+          </>
         )}
       </div>
 
@@ -770,50 +884,6 @@ export default function Sidebar({
     </aside>
   );
 }
-
-// === 工作区文件树容器:被 memo 焊死,只要 tree 引用不变,父组件任何重渲都不会触及子树 ===
-interface WorkspaceTreeProps {
-  tree: TreeItem[];
-  onToggle: (path: string) => void;
-  dirtyNodes: Map<string, BubbleKind>;
-  files: GitFile[];
-  onSelectFile: (path: string) => void;
-  onReadOnlyFile: (path: string) => void;
-  onOpenInVscode: (path: string) => void;
-}
-
-function WorkspaceTree({
-  tree,
-  onToggle,
-  dirtyNodes,
-  files,
-  onSelectFile,
-  onReadOnlyFile,
-  onOpenInVscode,
-}: WorkspaceTreeProps) {
-  return (
-    <>
-      {tree.map((n) => (
-        <TreeNodeView
-          key={n.path}
-          node={n}
-          depth={0}
-          onToggle={onToggle}
-          dirtyNodes={dirtyNodes}
-          files={files}
-          onSelectFile={onSelectFile}
-          onReadOnlyFile={onReadOnlyFile}
-          onOpenInVscode={onOpenInVscode}
-        />
-      ))}
-    </>
-  );
-}
-
-// 🌟 核心防御:只有当 tree 引用真的变了,才允许重渲。
-// dirtyNodes / files 的引用变化(由 watcher 触发)暂不触发 tree 重渲 ——
-// 视觉上 bubble 色延迟一拍可接受,因为 CHANGES/STAGED 列表才是脏状态的真相源。
-const MemoWorkspaceTree = memo(WorkspaceTree, (prev, next) => prev.tree === next.tree);
 
 // === 树节点视图(递归):VS Code 风格 —— chevron + 图标 + 文件名 ===
 function TreeNodeView({
