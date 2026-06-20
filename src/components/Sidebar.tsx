@@ -50,6 +50,18 @@ const STATUS_COLOR: Record<string, string> = {
 // untracked 表示子树含未追踪文件
 type BubbleKind = "modified" | "untracked";
 
+// 忽略路径/文件名清单 —— 命中后节点 dim + 图标淡出
+// 纯前端语义层"压低",不依赖 .gitignore;后端仍全扫描,前端只负责视觉降权
+// 匹配 node.name(basename),不是 node.path,避免 monorepo 嵌套漏匹配
+const IGNORE_NAMES: readonly string[] = [
+  ".git",
+  "node_modules",
+  "dist",
+  "target",
+  ".vscode",
+  "package-lock.json",
+];
+
 // === AI Commit 栏内联图标与小组件 ===
 
 // 极简齿轮图标 14×14
@@ -82,6 +94,48 @@ const RefreshIcon = ({ className = "" }: { className?: string }) => (
     <path d="M21 3v5h-5" />
     <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
     <path d="M8 16H3v5" />
+  </svg>
+);
+
+// 极简文件夹图标 13×13 —— 被调用处可通过 className 注入 opacity-40
+const FolderIcon = ({ className = "" }: { className?: string }) => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+       stroke="currentColor" strokeWidth="2"
+       strokeLinecap="round" strokeLinejoin="round"
+       className={`text-zinc-500 flex-shrink-0 ${className}`}>
+    <path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2z" />
+  </svg>
+);
+
+// 极简文件图标 13×13
+const FileIcon = ({ className = "" }: { className?: string }) => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+       stroke="currentColor" strokeWidth="2"
+       strokeLinecap="round" strokeLinejoin="round"
+       className={`text-zinc-500/80 flex-shrink-0 ${className}`}>
+    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+    <polyline points="14 2 14 8 20 8" />
+  </svg>
+);
+
+// 14×14 空心 chevron —— 折叠态 >,展开时 90° 旋转成 v;
+// 默认 zinc-400 + 行 hover 变白,跟文件夹 hover 状态联动
+const ChevronIcon = ({
+  expanded,
+  className = "",
+}: {
+  expanded: boolean;
+  className?: string;
+}) => (
+  <svg
+    width="14" height="14" viewBox="0 0 24 24" fill="none"
+    stroke="currentColor" strokeWidth="2"
+    strokeLinecap="round" strokeLinejoin="round"
+    className={`text-zinc-400 group-hover:text-white flex-shrink-0 transition-all duration-150 ${
+      expanded ? "rotate-90" : ""
+    } ${className}`}
+  >
+    <polyline points="9 18 15 12 9 6" />
   </svg>
 );
 
@@ -701,7 +755,7 @@ export default function Sidebar({
   );
 }
 
-// === 树节点视图(递归):每层 ml-4 缩进,文件夹用 ▸/▾ 三角 ===
+// === 树节点视图(递归):VS Code 风格 —— chevron + 图标 + 文件名 ===
 function TreeNodeView({
   node,
   depth,
@@ -715,35 +769,55 @@ function TreeNodeView({
 }) {
   // 文件夹 + 文件节点都查:map 里既有祖先文件夹也有文件自身
   const bubble = dirtyNodes.get(node.path);
-  // 文字分层:dirty > clean;clean 内再分 文件夹(text-zinc-200 + font-medium) / 文件(text-zinc-400)
+  const isIgnored = IGNORE_NAMES.includes(node.name);
+
+  // 文字色优先级:dirty > ignored > clean(folder/file)
   const baseText =
     bubble === "modified"
       ? "text-emerald-500/80"
       : bubble === "untracked"
       ? "text-amber-500/80"
+      : isIgnored
+      ? "text-zinc-600"
       : node.is_dir
       ? "text-zinc-200 font-medium"
       : "text-zinc-400";
+
+  // hover 文字色:dirty 色加深;ignored 保持低调(不变);folder 变白;file 变 zinc-100
   const hoverText =
     bubble === "modified"
       ? "hover:text-emerald-400"
       : bubble === "untracked"
       ? "hover:text-amber-400"
+      : isIgnored
+      ? ""
       : node.is_dir
       ? "hover:text-white"
-      : "hover:text-zinc-200";
+      : "hover:text-zinc-100";
+
+  // 图标透明度独立判定 —— 仅看 isIgnored,不被 dirty 压过
+  const iconClass = isIgnored ? "opacity-40" : "";
 
   return (
     <div>
       <div
-        className={`flex items-center h-[26px] text-[12px] font-mono rounded-sm hover:bg-white/[0.03] ${baseText} ${hoverText} cursor-pointer`}
+        className={`group flex items-center h-7 gap-2 pr-2 py-0.5 rounded-sm
+                    hover:bg-white/[0.03] transition-colors cursor-pointer
+                    ${baseText} ${hoverText}`}
         style={{ paddingLeft: 8 + depth * 16 }}
         onClick={node.is_dir ? () => onToggle(node.path) : undefined}
         title={node.path}
       >
-        <span className="w-3 text-ink-muted text-[10px]">
-          {node.is_dir ? (node.isOpen ? "▾" : "▸") : ""}
-        </span>
+        {node.is_dir ? (
+          <ChevronIcon expanded={node.isOpen} />
+        ) : (
+          <span className="w-[14px] flex-shrink-0" />
+        )}
+        {node.is_dir ? (
+          <FolderIcon className={iconClass} />
+        ) : (
+          <FileIcon className={iconClass} />
+        )}
         <span className="truncate">{node.name}</span>
       </div>
       {node.isOpen &&
