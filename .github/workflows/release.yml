@@ -38,6 +38,13 @@ jobs:
       - name: Install frontend dependencies (strict)
         run: npm ci
 
+      # 🌟 核心核武器：物理覆盖并强行洗脑 Rust 全局默认工具链
+      - name: Force Overwrite Default Toolchain to MSVC
+        run: |
+          rustup default stable-x86_64-pc-windows-msvc
+          rustup target add x86_64-pc-windows-msvc
+        shell: pwsh
+
       - name: Build Tauri bundle & publish draft release
         uses: tauri-apps/tauri-action@v0
         env:
