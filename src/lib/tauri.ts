@@ -1,7 +1,7 @@
 // Tauri 后端 invoke 封装 + dialog 文件夹选择
 import { invoke } from "@tauri-apps/api/core";
 import { ask, open } from "@tauri-apps/plugin-dialog";
-import type { GitFile, FileDiffData, FileEntry } from "../types";
+import type { GitFile, FileDiffData, FileEntry, IgnorePattern } from "../types";
 
 /** 弹原生系统文件夹选择对话框，返回用户选中的目录或 null */
 export async function pickRepoDir(): Promise<string | null> {
@@ -40,6 +40,10 @@ export const unstageFile = (repoPath: string, filePath: string) =>
 /** 丢弃单个文件的改动（untracked 走物理删除,其它走 checkout_head 恢复 HEAD） */
 export const discardFile = (repoPath: string, filePath: string, status: string) =>
   invoke<void>("discard_file", { repoPath, filePath, status });
+
+/** 解析仓库根 .gitignore,返回结构化 pattern 列表 —— 给前端 Tree 用作 dim 渲染 */
+export const parseGitignore = (repoPath: string) =>
+  invoke<IgnorePattern[]>("parse_gitignore", { repoPath });
 
 /** 获取当前已暂存区的全量 diff 文本（等价 `git diff --cached`） */
 export const getStagedDiff = (repoPath: string) =>

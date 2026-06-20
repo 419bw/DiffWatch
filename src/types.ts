@@ -31,6 +31,14 @@ export interface FileEntry {
   is_dir: boolean;
 }
 
+/** .gitignore 单条 pattern —— 由 Rust 解析后发给前端 */
+export interface IgnorePattern {
+  /** 去掉 ! 前缀和首尾 / 的 glob 主体 */
+  pattern: string;
+  /** true 表示 negation(.gitignore 里以 ! 开头),命中会取消之前的 ignore */
+  negated: boolean;
+}
+
 /**
  * 前端懒加载树节点 —— 在 FileEntry 基础上叠加 UI 状态
  * - `children` 仅在 isLoaded 后才挂载

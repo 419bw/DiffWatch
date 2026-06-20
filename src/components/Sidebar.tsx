@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import picomatch from "picomatch";
 import { message } from "@tauri-apps/plugin-dialog";
 import {
   executeCommit,
   getStagedDiff,
+  parseGitignore,
   pickRepoDir,
   readDirectory,
 } from "../lib/tauri";
@@ -11,7 +13,7 @@ import {
   generateCommitMessage,
   STORAGE_KEYS as AI_STORAGE_KEYS,
 } from "../lib/ai";
-import type { GitFile, FileEntry, TreeItem } from "../types";
+import type { GitFile, FileEntry, IgnorePattern, TreeItem } from "../types";
 
 interface SidebarProps {
   repoPath: string | null;
@@ -65,18 +67,6 @@ function animateExit(rowEl: HTMLElement, onFinish: () => void) {
 // 脏文件夹冒泡状态:modified 表示子树含 git-tracked 变更(M/S/R/T/D),
 // untracked 表示子树含未追踪文件
 type BubbleKind = "modified" | "untracked";
-
-// 忽略路径/文件名清单 —— 命中后节点 dim + 图标淡出
-// 纯前端语义层"压低",不依赖 .gitignore;后端仍全扫描,前端只负责视觉降权
-// 匹配 node.name(basename),不是 node.path,避免 monorepo 嵌套漏匹配
-const IGNORE_NAMES: readonly string[] = [
-  ".git",
-  "node_modules",
-  "dist",
-  "target",
-  ".vscode",
-  "package-lock.json",
-];
 
 // === AI Commit 栏内联图标与小组件 ===
 
@@ -292,6 +282,60 @@ export default function Sidebar({
 
   // 跟踪上次扫描的 repo —— 区分"repo 切换的初始加载"和"files 变化的刷新合并"
   const lastScannedRepoRef = useRef<string | null>(null);
+
+  // === .gitignore 解析结果 —— Tree 节点 dim 渲染的唯一真相源 ===
+  // repoPath 变化时拉一次,后续所有 tree 节点都通过 ignoreMatcher(node.path) 判断
+  const [ignorePatterns, setIgnorePatterns] = useState<IgnorePattern[]>([]);
+  useEffect(() => {
+    if (!repoPath) {
+      setIgnorePatterns([]);
+      return;
+    }
+    let cancelled = false;
+    parseGitignore(repoPath)
+      .then((patterns) => {
+        if (!cancelled) setIgnorePatterns(patterns);
+      })
+      .catch((e) => {
+        console.error("parse_gitignore 失败", e);
+        if (!cancelled) setIgnorePatterns([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [repoPath]);
+
+  // === 把 gitignore 语义翻译成 picomatch 匹配的 matcher(双轨 glob 扩展) ===
+  // 关键陷阱防御:picomatch 的 matchBase 只比对路径最后一段 basename,
+  // 会让"target/debug/main.d"这种嵌套子节点逃过 ignore。
+  // 这里每个 pattern 拆成两条:自身一条 + 递归子孙一条,还原"一人得道全家变灰"。
+  const ignoreMatcher = useMemo(() => {
+    const expanded = ignorePatterns.flatMap((p) => {
+      const isUnanchored = !p.pattern.includes("/");
+      if (isUnanchored) {
+        // 未锚定项(target / node_modules / HANDOFF.md 等):
+        // 任意层级下的同名节点 + 它的所有子孙
+        return [
+          { test: picomatch(`**/${p.pattern}`, { dot: true }), negated: p.negated },
+          { test: picomatch(`**/${p.pattern}/**`, { dot: true }), negated: p.negated },
+        ];
+      }
+      // 已锚定项(如 src/generated/):从仓库根锚定 + 它的所有子孙
+      return [
+        { test: picomatch(p.pattern, { dot: true }), negated: p.negated },
+        { test: picomatch(`${p.pattern}/**`, { dot: true }), negated: p.negated },
+      ];
+    });
+
+    return (nodePath: string) => {
+      let ignored = false;
+      // gitignore 语义:后面的规则覆盖前面,! 取消之前的 ignore
+      for (const m of expanded) {
+        if (m.test(nodePath)) ignored = !m.negated;
+      }
+      return ignored;
+    };
+  }, [ignorePatterns]);
 
   // === AI Commit 栏 state ===
   const [commitMessage, setCommitMessage] = useState("");
@@ -631,6 +675,7 @@ useEffect(() => {
                 onSelectFile={onSelectFile}
                 onReadOnlyFile={onReadOnlyFile}
                 onOpenInVscode={onOpenInVscode}
+                ignoreMatcher={ignoreMatcher}
               />
             ))}
           </>
@@ -895,6 +940,7 @@ function TreeNodeView({
   onSelectFile,
   onReadOnlyFile,
   onOpenInVscode,
+  ignoreMatcher,
 }: {
   node: TreeItem;
   depth: number;
@@ -904,10 +950,12 @@ function TreeNodeView({
   onSelectFile: (path: string) => void;
   onReadOnlyFile: (path: string) => void;
   onOpenInVscode: (path: string) => void;
+  ignoreMatcher: (path: string) => boolean;
 }) {
   // 文件夹 + 文件节点都查:map 里既有祖先文件夹也有文件自身
   const bubble = dirtyNodes.get(node.path);
-  const isIgnored = IGNORE_NAMES.includes(node.name);
+  // dim 判定走 .gitignore 解析后的 glob matcher,覆盖目标节点自身 + 所有子孙
+  const isIgnored = ignoreMatcher(node.path);
 
   // 文字色优先级:dirty > ignored > clean(folder/file)
   const baseText =
@@ -998,6 +1046,7 @@ function TreeNodeView({
               onSelectFile={onSelectFile}
               onReadOnlyFile={onReadOnlyFile}
               onOpenInVscode={onOpenInVscode}
+              ignoreMatcher={ignoreMatcher}
             />
           ))}
         </div>

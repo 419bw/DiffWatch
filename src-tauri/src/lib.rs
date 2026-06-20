@@ -22,6 +22,7 @@ pub fn run() {
             commands::read_workspace_file,
             commands::open_in_vscode,
             commands::patch_file_line,
+            commands::parse_gitignore,
             watcher::start_watching,
             watcher::stop_watching,
         ])

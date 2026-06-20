@@ -36,6 +36,15 @@ pub struct FileEntry {
     pub is_dir: bool,
 }
 
+/// .gitignore 单条 pattern —— 给前端 glob matcher 用的最小结构
+#[derive(Serialize, Clone, Debug)]
+pub struct IgnorePattern {
+    /// 去掉 ! 前缀与首尾 / 之后的 glob 主体(已 trim)
+    pub pattern: String,
+    /// true 表示这是 negation 模式(原行以 ! 开头),命中后会把已 ignore 的节点放回
+    pub negated: bool,
+}
+
 /// 列出仓库中所有变更（工作区 + 暂存区）
 pub fn list_changed_files(repo_path: &str) -> Result<Vec<GitFile>, String> {
     let repo = Repository::open(repo_path).map_err(|e| format!("打开仓库失败: {e}"))?;
@@ -370,6 +379,45 @@ pub fn read_directory(dir_path: &str) -> Result<Vec<FileEntry>, String> {
             }
         })
         .collect())
+}
+
+/// 解析仓库根 .gitignore,返回结构化 pattern 列表
+///
+/// 设计目标:
+/// - 给前端 TreeNodeView 提供 dim 渲染依据,替代原本的硬编码 IGNORE_NAMES 数组
+/// - 手写 ~20 行就够,不引入 ignore crate(避免新增依赖 + 编译时间)
+/// - 跳过空行 + # 注释
+/// - 处理 ! negation 前缀(negated = true 的模式命中后会"放回"之前忽略的路径)
+/// - 去掉首部 / 与尾部 /,统一成 clean glob 主体
+///
+/// 注意:这里只解析 .gitignore 顶层文件,不动 .git/info/exclude 或全局 gitignore
+/// (单仓库内 99% 的场景顶层 .gitignore 就够了)。
+pub fn parse_gitignore(repo_path: &str) -> Result<Vec<IgnorePattern>, String> {
+    let gi = Path::new(repo_path).join(".gitignore");
+    if !gi.exists() {
+        return Ok(vec![]);
+    }
+    let content = fs::read_to_string(&gi).map_err(|e| format!("读 .gitignore 失败: {e}"))?;
+    let mut out = Vec::new();
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() || trimmed.starts_with('#') {
+            continue;
+        }
+        let (negated, rest) = if let Some(s) = trimmed.strip_prefix('!') {
+            (true, s.trim_start_matches('/'))
+        } else {
+            (false, trimmed.trim_start_matches('/').trim_end_matches('/'))
+        };
+        if rest.is_empty() {
+            continue;
+        }
+        out.push(IgnorePattern {
+            pattern: rest.to_string(),
+            negated,
+        });
+    }
+    Ok(out)
 }
 
 /// 读取单个工作区文件(只读查看器用)。

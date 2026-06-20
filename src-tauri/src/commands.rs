@@ -6,9 +6,10 @@
 
 use crate::git_ops::{
     discard_file as discard_impl, execute_commit as execute_commit_impl, list_changed_files,
-    open_in_vscode as open_in_vscode_impl, patch_file_line as patch_file_line_impl,
-    read_directory as read_dir_impl, read_file_diff, read_workspace_file as read_workspace_impl,
-    stage_file as stage_impl, unstage_file as unstage_impl, FileDiffData, FileEntry, GitFile,
+    open_in_vscode as open_in_vscode_impl, parse_gitignore as parse_gitignore_impl,
+    patch_file_line as patch_file_line_impl, read_directory as read_dir_impl, read_file_diff,
+    read_workspace_file as read_workspace_impl, stage_file as stage_impl,
+    unstage_file as unstage_impl, FileDiffData, FileEntry, GitFile, IgnorePattern,
 };
 
 /// 获取仓库变更文件列表
@@ -80,4 +81,10 @@ pub fn patch_file_line(
     new_content: String,
 ) -> Result<(), String> {
     patch_file_line_impl(&repo_path, &file_path, line_num, &new_content)
+}
+
+/// 解析仓库根 .gitignore,返回结构化 pattern 列表 —— 前端 Tree 用作 dim 渲染依据
+#[tauri::command]
+pub fn parse_gitignore(repo_path: String) -> Result<Vec<IgnorePattern>, String> {
+    parse_gitignore_impl(&repo_path)
 }
