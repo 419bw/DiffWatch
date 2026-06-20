@@ -524,7 +524,13 @@ export default function Sidebar({
       </div>
 
       {/* === 双选项卡:CHANGES / STAGED === */}
-      <div className="flex border-t border-[#262B37] flex-shrink-0">
+      <div className="flex border-t border-[#262B37] flex-shrink-0 relative">
+        {/* 滑动绿色高亮条:Changes 位 ↔ Staged 位,200ms ease-out 横向滑移 */}
+        <div
+          className={`absolute bottom-0 left-0 w-1/2 h-px bg-emerald-500
+                      transition-transform duration-200 ease-out
+                      ${activeTab === "changes" ? "translate-x-0" : "translate-x-full"}`}
+        />
         <button
           onClick={() => setActiveTab("changes")}
           className={`flex-1 py-1.5 text-[11px] font-semibold uppercase tracking-wider transition-colors ${
@@ -534,11 +540,6 @@ export default function Sidebar({
           }`}
         >
           Changes ({changesFiles.length})
-          <div
-            className={`h-px mt-1.5 transition-all duration-200 ease-out ${
-              activeTab === "changes" ? "bg-emerald-500" : "bg-transparent"
-            }`}
-          />
         </button>
         <button
           onClick={() => setActiveTab("staged")}
@@ -549,11 +550,6 @@ export default function Sidebar({
           }`}
         >
           Staged ({stagedFiles.length})
-          <div
-            className={`h-px mt-1.5 transition-all duration-200 ease-out ${
-              activeTab === "staged" ? "bg-emerald-500" : "bg-transparent"
-            }`}
-          />
         </button>
       </div>
       <div className="flex-1 min-h-0 overflow-y-auto scrollbar-thin px-2 py-1">
