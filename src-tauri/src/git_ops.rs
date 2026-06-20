@@ -41,9 +41,12 @@ pub fn list_changed_files(repo_path: &str) -> Result<Vec<GitFile>, String> {
     let repo = Repository::open(repo_path).map_err(|e| format!("打开仓库失败: {e}"))?;
     let mut opts = StatusOptions::new();
     opts.include_untracked(true)
-        // 不递归进 untracked 目录,否则 src-tauri/ 这种整个未跟踪目录会展开
-        // 出 Cargo.toml/build.rs/tauri.conf.json/icons/* 等一堆噪音
-        .recurse_untracked_dirs(false)
+        // untracked 目录里的文件也单独列出 —— 否则 .github/workflows/release.yml
+        // 这种合法用户文件会被父目录吞掉。已 tracked 目录(如 src-tauri/)不走
+        // 这条路径,不会被展开成噪音。.gitignore 里的目录由 include_ignored(false) 过滤。
+        // 注:CLAUDE.md known-issue #6 是历史包袱,当前 repo src-tauri/ 已全 tracked,
+        // 噪音场景不复存在;若未来 src-tauri/ 被 untracked 出噪音,那是配置问题不是代码问题。
+        .recurse_untracked_dirs(true)
         .include_ignored(false);
     let statuses = repo
         .statuses(Some(&mut opts))
