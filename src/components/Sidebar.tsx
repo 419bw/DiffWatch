@@ -260,7 +260,7 @@ export default function Sidebar({
                 <li
                   key={f.path}
                   onClick={() => onSelectFile(f.path)}
-                  className={`group relative flex items-center h-6 px-2 text-[12px] font-mono rounded-sm cursor-pointer
+                  className={`group flex items-center h-6 px-2 text-[12px] font-mono rounded-sm cursor-pointer
                     ${
                       isSelected
                         ? "bg-white/[0.06] text-white"
@@ -268,11 +268,12 @@ export default function Sidebar({
                     }`}
                   title={f.path}
                 >
-                  <span className="truncate flex-1">{f.path}</span>
+                  {/* 文件名 — min-w-0 让 truncate 在 flex 中正确生效 */}
+                  <span className="truncate flex-1 min-w-0">{f.path}</span>
 
-                  {/* 默认状态字母 — hover 时淡出 */}
+                  {/* 默认状态字母 — hover 时淡出,保留 20px 布局空间避免按钮跳位 */}
                   <span
-                    className={`ml-2 text-[10px] font-bold w-3 text-center transition-opacity duration-75
+                    className={`flex-shrink-0 ml-2 text-[10px] font-bold w-3 text-center transition-opacity duration-75
                       group-hover:opacity-0 ${
                       STATUS_COLOR[f.status] ?? "text-ink-muted"
                     }`}
@@ -280,15 +281,15 @@ export default function Sidebar({
                     {STATUS_LETTER[f.status] ?? "?"}
                   </span>
 
-                  {/* Hover 动作条 — absolute 浮在状态字母上方 */}
-                  <div className="absolute right-2 flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-75 pointer-events-none group-hover:pointer-events-auto">
+                  {/* Hover 动作条 — flex 子项,展开时把文件名往左挤,绝不覆盖 */}
+                  <div className="flex-shrink-0 ml-0 group-hover:ml-2 max-w-0 group-hover:max-w-[160px] overflow-hidden opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto transition-all duration-75 flex items-center gap-1.5">
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
                         onStageFile(f.path);
                       }}
                       title="暂存此改动"
-                      className="text-[10px] font-bold text-emerald-400 hover:text-emerald-300 leading-none px-0.5"
+                      className="text-[10px] font-bold text-emerald-400 hover:text-emerald-300 leading-none px-0.5 whitespace-nowrap"
                     >
                       ✓ Stage
                     </button>
@@ -299,7 +300,7 @@ export default function Sidebar({
                         onDiscardFile(f.path, f.status);
                       }}
                       title="丢弃此改动"
-                      className="text-[10px] font-bold text-red-400 hover:text-red-300 leading-none px-0.5"
+                      className="text-[10px] font-bold text-red-400 hover:text-red-300 leading-none px-0.5 whitespace-nowrap"
                     >
                       ✕ Discard
                     </button>
