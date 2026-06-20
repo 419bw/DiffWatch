@@ -73,7 +73,9 @@ export async function generateCommitMessage(diff: string): Promise<string> {
         model,
         messages: [{ role: "user", content: prompt }],
         temperature: 0.3,
-        max_tokens: 300,
+        // reasoning 模型(DeepSeek-R1/Flash 等)需要给推理留 2-3x token 预算,
+        // 否则 finish_reason=length 截断 → content 为空。1000 留 600 推理 + 400 输出。
+        max_tokens: 1000,
       }),
       signal: controller.signal,
     });
