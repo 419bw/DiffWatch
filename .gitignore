@@ -29,5 +29,8 @@ src-tauri/target/
 src-tauri/Cargo.lock
 src-tauri/gen/
 
-# handoff 是给人看的，不进 diff
+# handoff / scratch 是给人看的，不进 diff
 HANDOFF.md
+CLAUDE.md
+UPSTREAM_ISSUES.md
+demo-row-exit.html

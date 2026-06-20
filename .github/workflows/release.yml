@@ -1,0 +1,49 @@
+name: Release
+
+# 仅当推送形如 v1.0.0 的版本标签时触发
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write   # 让 GITHUB_TOKEN 有权限创建/更新 Release
+
+jobs:
+  release:
+    name: Build & Publish Windows Release
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"     # 自动缓存 ~/.npm 与 package-lock.json hash 关联
+
+      - name: Setup Stable Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build artifacts
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target   # 与 src-tauri/Cargo.toml 对齐
+
+      - name: Install frontend dependencies (strict)
+        run: npm ci
+
+      - name: Build Tauri bundle & publish draft release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}    # 用推送的 v* tag 作为 Release 名
+          releaseName: "diffWatch ${{ github.ref_name }}"
+          releaseDraft: true                # 默认草稿,人工核验后再 publish
+          releaseBody: |
+            自动构建产物 —— Windows 安装包与绿色版。
+
+            ⚠️ 草稿状态,请人工核验后再发布。
+          args: --target x86_64-pc-windows-msvc
