@@ -10,6 +10,7 @@ import {
   stageFile,
   startWatching,
   stopWatching,
+  unstageFile,
 } from "./lib/tauri";
 import type { GitFile } from "./types";
 
@@ -86,6 +87,20 @@ export default function App() {
     setSelectedFile(null);
   }, [refresh]);
 
+  // === Unstage 操作 — 把文件从暂存区撤回,refresh 后自动归位到 CHANGES tab ===
+  const handleUnstageFile = useCallback(
+    async (filePath: string) => {
+      if (!repoPath) return;
+      try {
+        await unstageFile(repoPath, filePath);
+        refresh();
+      } catch (e) {
+        console.error("unstage 失败", e);
+      }
+    },
+    [repoPath, refresh]
+  );
+
   // === repoPath 变化时,启停 watchdog ===
   useEffect(() => {
     if (!repoPath) {
@@ -153,6 +168,7 @@ export default function App() {
           onRefresh={() => refresh()}
           onStageFile={handleStageFile}
           onDiscardFile={handleDiscardFile}
+          onUnstageFile={handleUnstageFile}
           onCommitDone={handleCommitDone}
           loading={loading}
         />

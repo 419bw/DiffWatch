@@ -22,6 +22,7 @@ interface SidebarProps {
   onRefresh: () => void;
   onStageFile: (path: string) => void;
   onDiscardFile: (path: string, status: string) => void;
+  onUnstageFile: (path: string) => void;
   onCommitDone: () => void;
   loading: boolean;
 }
@@ -132,6 +133,7 @@ export default function Sidebar({
   onRefresh,
   onStageFile,
   onDiscardFile,
+  onUnstageFile,
   onCommitDone,
   loading,
 }: SidebarProps) {
@@ -145,6 +147,20 @@ export default function Sidebar({
   const [aiLoading, setAiLoading] = useState(false);
   const [committing, setCommitting] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+
+  // === 双选项卡 ===
+  type Tab = "changes" | "staged";
+  const [activeTab, setActiveTab] = useState<Tab>("changes");
+
+  // 单源数据流:files prop 包含全部已暂存+未暂存,客户端分流
+  const changesFiles = useMemo(
+    () => files.filter((f) => f.status !== "staged"),
+    [files]
+  );
+  const stagedFiles = useMemo(
+    () => files.filter((f) => f.status === "staged"),
+    [files]
+  );
 
   // AI 配置 —— 从 localStorage 初始化,任意字段变化立刻持久化
   const [aiBaseUrl, setAiBaseUrl] = useState(
@@ -182,7 +198,7 @@ export default function Sidebar({
     try {
       const diff = await getStagedDiff(repoPath);
       if (!diff.trim()) {
-        await message("请先 Stage 留住文件", {
+        await message("暂存区为空,请先 Stage 留住文件", {
           title: "暂存区为空",
           kind: "info",
         });
@@ -411,16 +427,110 @@ export default function Sidebar({
         )}
       </div>
 
-      {/* === Section 2:CHANGES(变更文件) === */}
-      <SectionHeader label="Changes" />
+      {/* === 双选项卡:CHANGES / STAGED === */}
+      <div className="flex border-t border-white/5 flex-shrink-0">
+        <button
+          onClick={() => setActiveTab("changes")}
+          className={`flex-1 py-1.5 text-[11px] font-semibold uppercase tracking-wider transition-colors ${
+            activeTab === "changes"
+              ? "text-white"
+              : "text-gray-500 hover:text-gray-300"
+          }`}
+        >
+          Changes ({changesFiles.length})
+          <div
+            className={`h-px mt-1.5 ${
+              activeTab === "changes" ? "bg-emerald-500" : "bg-transparent"
+            }`}
+          />
+        </button>
+        <button
+          onClick={() => setActiveTab("staged")}
+          className={`flex-1 py-1.5 text-[11px] font-semibold uppercase tracking-wider transition-colors ${
+            activeTab === "staged"
+              ? "text-white"
+              : "text-gray-500 hover:text-gray-300"
+          }`}
+        >
+          Staged ({stagedFiles.length})
+          <div
+            className={`h-px mt-1.5 ${
+              activeTab === "staged" ? "bg-emerald-500" : "bg-transparent"
+            }`}
+          />
+        </button>
+      </div>
       <div className="flex-1 min-h-0 overflow-y-auto scrollbar-thin px-2 py-1">
-        {files.length === 0 ? (
+        {activeTab === "changes" ? (
+          changesFiles.length === 0 ? (
+            <div className="px-2 py-3 text-[11px] text-gray-500">
+              {repoPath ? (loading ? "加载中…" : "无未暂存变更") : "—"}
+            </div>
+          ) : (
+            <ul>
+              {changesFiles.map((f) => {
+                const isSelected = selectedFile === f.path;
+                return (
+                  <li
+                    key={f.path}
+                    onClick={() => onSelectFile(f.path)}
+                    className={`group flex items-center h-6 px-2 text-[12px] font-mono rounded-sm cursor-pointer
+                      ${
+                        isSelected
+                          ? "bg-white/[0.06] text-white"
+                          : "text-ink-base hover:text-white hover:bg-white/[0.03]"
+                      }`}
+                    title={f.path}
+                  >
+                    {/* 文件名 — min-w-0 让 truncate 在 flex 中正确生效 */}
+                    <span className="truncate flex-1 min-w-0">{f.path}</span>
+
+                    {/* 默认状态字母 — hover 时淡出,保留 20px 布局空间避免按钮跳位 */}
+                    <span
+                      className={`flex-shrink-0 ml-2 text-[10px] font-bold w-3 text-center transition-opacity duration-75
+                        group-hover:opacity-0 ${
+                        STATUS_COLOR[f.status] ?? "text-ink-muted"
+                      }`}
+                    >
+                      {STATUS_LETTER[f.status] ?? "?"}
+                    </span>
+
+                    {/* Hover 动作条 — flex 子项,展开时把文件名往左挤,绝不覆盖 */}
+                    <div className="flex-shrink-0 ml-0 group-hover:ml-2 max-w-0 group-hover:max-w-[160px] overflow-hidden opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto transition-all duration-75 flex items-center gap-1.5">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onStageFile(f.path);
+                        }}
+                        title="暂存此改动"
+                        className="text-[10px] font-bold text-emerald-400 hover:text-emerald-300 leading-none px-0.5 whitespace-nowrap"
+                      >
+                        ✓ Stage
+                      </button>
+                      <span className="text-ink-muted/40 text-[10px]">|</span>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onDiscardFile(f.path, f.status);
+                        }}
+                        title="丢弃此改动"
+                        className="text-[10px] font-bold text-red-400 hover:text-red-300 leading-none px-0.5 whitespace-nowrap"
+                      >
+                        ✕ Discard
+                      </button>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )
+        ) : stagedFiles.length === 0 ? (
           <div className="px-2 py-3 text-[11px] text-gray-500">
-            {repoPath ? (loading ? "加载中…" : "无变更") : "—"}
+            {repoPath ? "暂存区为空" : "—"}
           </div>
         ) : (
           <ul>
-            {files.map((f) => {
+            {stagedFiles.map((f) => {
               const isSelected = selectedFile === f.path;
               return (
                 <li
@@ -434,41 +544,27 @@ export default function Sidebar({
                     }`}
                   title={f.path}
                 >
-                  {/* 文件名 — min-w-0 让 truncate 在 flex 中正确生效 */}
                   <span className="truncate flex-1 min-w-0">{f.path}</span>
 
-                  {/* 默认状态字母 — hover 时淡出,保留 20px 布局空间避免按钮跳位 */}
+                  {/* Staged 状态固定 "S" + neon-cyan */}
                   <span
                     className={`flex-shrink-0 ml-2 text-[10px] font-bold w-3 text-center transition-opacity duration-75
-                      group-hover:opacity-0 ${
-                      STATUS_COLOR[f.status] ?? "text-ink-muted"
-                    }`}
+                      group-hover:opacity-0 text-neon-cyan`}
                   >
-                    {STATUS_LETTER[f.status] ?? "?"}
+                    S
                   </span>
 
-                  {/* Hover 动作条 — flex 子项,展开时把文件名往左挤,绝不覆盖 */}
-                  <div className="flex-shrink-0 ml-0 group-hover:ml-2 max-w-0 group-hover:max-w-[160px] overflow-hidden opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto transition-all duration-75 flex items-center gap-1.5">
+                  {/* Hover 动作条 —— Staged 专属 ↺ Unstage 单按钮 */}
+                  <div className="flex-shrink-0 ml-0 group-hover:ml-2 max-w-0 group-hover:max-w-[110px] overflow-hidden opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto transition-all duration-75 flex items-center">
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        onStageFile(f.path);
+                        onUnstageFile(f.path);
                       }}
-                      title="暂存此改动"
-                      className="text-[10px] font-bold text-emerald-400 hover:text-emerald-300 leading-none px-0.5 whitespace-nowrap"
+                      title="取消暂存"
+                      className="text-[10px] font-bold text-amber-400 hover:text-amber-300 leading-none px-0.5 whitespace-nowrap"
                     >
-                      ✓ Stage
-                    </button>
-                    <span className="text-ink-muted/40 text-[10px]">|</span>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onDiscardFile(f.path, f.status);
-                      }}
-                      title="丢弃此改动"
-                      className="text-[10px] font-bold text-red-400 hover:text-red-300 leading-none px-0.5 whitespace-nowrap"
-                    >
-                      ✕ Discard
+                      ↺ Unstage
                     </button>
                   </div>
                 </li>
@@ -562,7 +658,7 @@ export default function Sidebar({
 
           <button
             onClick={handleCommit}
-            disabled={committing || !commitMessage.trim()}
+            disabled={committing || !commitMessage.trim() || stagedFiles.length === 0}
             className="gel-box rounded-md px-3 py-1 text-xs font-bold text-ink-base
                        hover:text-white transition-colors disabled:opacity-40
                        flex-shrink-0"

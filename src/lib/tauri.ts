@@ -33,6 +33,10 @@ export const stopWatching = () => invoke<void>("stop_watching");
 export const stageFile = (repoPath: string, filePath: string) =>
   invoke<void>("stage_file", { repoPath, filePath });
 
+/** 把单个文件从暂存区撤回到工作区(等价 `git reset HEAD <path>`,Mixed reset,不动 worktree) */
+export const unstageFile = (repoPath: string, filePath: string) =>
+  invoke<void>("unstage_file", { repoPath, filePath });
+
 /** 丢弃单个文件的改动（untracked 走物理删除,其它走 checkout_head 恢复 HEAD） */
 export const discardFile = (repoPath: string, filePath: string, status: string) =>
   invoke<void>("discard_file", { repoPath, filePath, status });

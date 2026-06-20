@@ -213,6 +213,35 @@ pub fn execute_commit(repo_path: &str, message: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// 取消暂存指定文件 —— 把文件从暂存区(index)撤回到工作区,不动文件内容。
+///
+/// - HEAD 存在:用 `repo.reset_default` 做 single-pathspec Mixed reset
+///   (libgit2 层 hardcoded,只更新 index 不过 worktree)
+/// - Unborn HEAD(刚 `git init` 还没首次 commit):用 `index.remove_path`
+///   直接从索引移除
+pub fn unstage_file(repo_path: &str, file_path: &str) -> Result<(), String> {
+    let repo = Repository::open(repo_path).map_err(|e| format!("打开仓库失败: {e}"))?;
+    let path = Path::new(file_path);
+
+    match repo.head().ok().and_then(|h| h.peel_to_commit().ok()) {
+        Some(head_commit) => {
+            let target = head_commit.as_object();
+            repo.reset_default(Some(target), [path])
+                .map_err(|e| format!("取消暂存失败: {e}"))?;
+        }
+        None => {
+            let mut index = repo.index().map_err(|e| format!("读取索引失败: {e}"))?;
+            index
+                .remove_path(path)
+                .map_err(|e| format!("从索引移除失败(可能未暂存): {e}"))?;
+            index
+                .write()
+                .map_err(|e| format!("写入索引失败: {e}"))?;
+        }
+    }
+    Ok(())
+}
+
 fn read_head_blob(repo: &Repository, file_path: &str) -> String {
     let head = match repo.head() {
         Ok(h) => h,

@@ -16,6 +16,7 @@ pub fn run() {
             commands::read_directory,
             commands::stage_file,
             commands::discard_file,
+            commands::unstage_file,
             commands::get_staged_diff,
             commands::execute_commit,
             watcher::start_watching,

@@ -6,8 +6,8 @@
 
 use crate::git_ops::{
     discard_file as discard_impl, execute_commit as execute_commit_impl, list_changed_files,
-    read_directory as read_dir_impl, read_file_diff, stage_file as stage_impl, FileDiffData,
-    FileEntry, GitFile,
+    read_directory as read_dir_impl, read_file_diff, stage_file as stage_impl,
+    unstage_file as unstage_impl, FileDiffData, FileEntry, GitFile,
 };
 
 /// 获取仓库变更文件列表
@@ -50,4 +50,10 @@ pub fn get_staged_diff(repo_path: String) -> Result<String, String> {
 #[tauri::command]
 pub fn execute_commit(repo_path: String, message: String) -> Result<(), String> {
     execute_commit_impl(&repo_path, &message)
+}
+
+/// 取消暂存指定文件(等价 `git reset HEAD <path>`,Mixed reset,不动 worktree)
+#[tauri::command]
+pub fn unstage_file(repo_path: String, file_path: String) -> Result<(), String> {
+    unstage_impl(&repo_path, &file_path)
 }
