@@ -25,6 +25,10 @@ jobs:
 
       - name: Setup Stable Rust toolchain
         uses: dtolnay/rust-toolchain@stable
+        with:
+          # 🌟 核心破局点：显式强制安装 msvc 工具链，与其后 tauri build 要求的 target 完全咬合
+          toolchain: stable-x86_64-pc-windows-msvc
+          targets: x86_64-pc-windows-msvc
 
       - name: Cache Rust build artifacts
         uses: swatinem/rust-cache@v2
