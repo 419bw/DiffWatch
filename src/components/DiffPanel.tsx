@@ -293,13 +293,20 @@ export default function DiffPanel({
         >
           {filePath}
         </div>
-        <div className="flex bg-[#13161C] border border-[#262B37] rounded-sm
+        <div className="relative flex bg-[#13161C] border border-[#262B37] rounded-sm
                        p-0.5 flex-shrink-0 items-center">
+          {/* 滑块盒:mode 切 Unified 时 translate-x-full,黄油般横向滑移 */}
+          <div
+            className={`absolute inset-y-0.5 left-0.5 w-[calc(50%-2px)] bg-[#1C1F26]
+                        rounded-sm shadow-sm
+                        transition-transform duration-200 ease-out
+                        ${mode === DiffModeEnum.SplitGitHub ? "translate-x-0" : "translate-x-full"}`}
+          />
           <button
             onClick={() => setMode(DiffModeEnum.SplitGitHub)}
-            className={`px-2 py-0.5 text-[11px] font-medium rounded-sm transition-colors ${
+            className={`relative z-10 px-2 py-0.5 text-[11px] font-medium rounded-sm transition-colors ${
               mode === DiffModeEnum.SplitGitHub
-                ? "bg-[#1C1F26] text-white shadow-sm"
+                ? "text-white"
                 : "text-gray-500 hover:text-zinc-300"
             }`}
           >
@@ -307,9 +314,9 @@ export default function DiffPanel({
           </button>
           <button
             onClick={() => setMode(DiffModeEnum.Unified)}
-            className={`px-2 py-0.5 text-[11px] font-medium rounded-sm transition-colors ${
+            className={`relative z-10 px-2 py-0.5 text-[11px] font-medium rounded-sm transition-colors ${
               mode === DiffModeEnum.Unified
-                ? "bg-[#1C1F26] text-white shadow-sm"
+                ? "text-white"
                 : "text-gray-500 hover:text-zinc-300"
             }`}
           >

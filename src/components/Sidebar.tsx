@@ -553,20 +553,17 @@ export default function Sidebar({
               {repoPath ? (loading ? "加载中…" : "无未暂存变更") : "—"}
             </div>
           ) : (
-            <ul>
+            <ul className="overflow-hidden">
               {changesFiles.map((f) => {
                 const isSelected = selectedFile === f.path;
                 return (
                   <li
                     key={f.path}
                     onClick={() => onSelectFile(f.path)}
-                    className={`group flex items-center h-[26px] px-2 text-[12px] font-mono rounded-sm cursor-pointer
-                                transition-colors duration-150 ease-in-out
-                      ${
-                        isSelected
-                          ? "bg-[#202430] text-white"
-                          : "text-zinc-400 hover:text-white hover:bg-white/[0.03]"
-                      }`}
+                    className={`group flex items-center px-2 text-[12px] font-mono rounded-sm cursor-pointer
+                                ${isSelected
+                                  ? "bg-[#202430] text-white"
+                                  : "text-zinc-400 hover:text-white hover:bg-white/[0.03]"}`}
                     title={f.path}
                   >
                     {/* 文件名 — min-w-0 让 truncate 在 flex 中正确生效 */}
@@ -616,20 +613,17 @@ export default function Sidebar({
             {repoPath ? "暂存区为空" : "—"}
           </div>
         ) : (
-          <ul>
+          <ul className="overflow-hidden">
             {stagedFiles.map((f) => {
               const isSelected = selectedFile === f.path;
               return (
                 <li
                   key={f.path}
                   onClick={() => onSelectFile(f.path)}
-                  className={`group flex items-center h-[26px] px-2 text-[12px] font-mono rounded-sm cursor-pointer
-                              transition-colors duration-150 ease-in-out
-                    ${
-                      isSelected
-                        ? "bg-[#202430] text-white"
-                        : "text-zinc-400 hover:text-white hover:bg-white/[0.03]"
-                    }`}
+                  className={`group flex items-center px-2 text-[12px] font-mono rounded-sm cursor-pointer
+                              ${isSelected
+                                ? "bg-[#202430] text-white"
+                                : "text-zinc-400 hover:text-white hover:bg-white/[0.03]"}`}
                   title={f.path}
                 >
                   <span className="truncate flex-1 min-w-0">{f.path}</span>
@@ -721,6 +715,7 @@ export default function Sidebar({
               className="w-full bg-transparent resize-none outline-none
                          text-[12px] font-mono text-ink-base
                          placeholder:text-gray-600 disabled:opacity-50
+                         transition-[height] duration-150 ease-out
                          min-h-[24px] max-h-[120px] overflow-y-auto"
             />
 
@@ -862,20 +857,28 @@ function TreeNodeView({
         )}
         <span className="truncate">{node.name}</span>
       </div>
-      {node.isOpen &&
-        node.children?.map((child) => (
-          <TreeNodeView
-            key={child.path}
-            node={child}
-            depth={depth + 1}
-            onToggle={onToggle}
-            dirtyNodes={dirtyNodes}
-            files={files}
-            onSelectFile={onSelectFile}
-            onReadOnlyFile={onReadOnlyFile}
-            onOpenInVscode={onOpenInVscode}
-          />
-        ))}
+      {/* === CSS Grid 卷轴展开:grid-template-rows 在 1fr ↔ 0fr 之间过渡 === */}
+      <div
+        className={`grid transition-[grid-template-rows] duration-200 ease-out ${
+          node.isOpen ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+        }`}
+      >
+        <div className="overflow-hidden">
+          {node.children?.map((child) => (
+            <TreeNodeView
+              key={child.path}
+              node={child}
+              depth={depth + 1}
+              onToggle={onToggle}
+              dirtyNodes={dirtyNodes}
+              files={files}
+              onSelectFile={onSelectFile}
+              onReadOnlyFile={onReadOnlyFile}
+              onOpenInVscode={onOpenInVscode}
+            />
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
