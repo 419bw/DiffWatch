@@ -37,6 +37,14 @@ export const stageFile = (repoPath: string, filePath: string) =>
 export const discardFile = (repoPath: string, filePath: string, status: string) =>
   invoke<void>("discard_file", { repoPath, filePath, status });
 
+/** 获取当前已暂存区的全量 diff 文本（等价 `git diff --cached`） */
+export const getStagedDiff = (repoPath: string) =>
+  invoke<string>("get_staged_diff", { repoPath });
+
+/** 用 message 提交当前暂存区 */
+export const executeCommit = (repoPath: string, message: string) =>
+  invoke<void>("execute_commit", { repoPath, message });
+
 /** 丢弃前的二次确认弹窗 —— tauri-plugin-dialog 的 ask 原生系统对话框 */
 export async function confirmDiscard(filePath: string): Promise<boolean> {
   return await ask(

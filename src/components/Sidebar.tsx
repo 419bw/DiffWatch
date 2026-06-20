@@ -1,5 +1,16 @@
-import { useEffect, useMemo, useState } from "react";
-import { pickRepoDir, readDirectory } from "../lib/tauri";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { message } from "@tauri-apps/plugin-dialog";
+import {
+  executeCommit,
+  getStagedDiff,
+  pickRepoDir,
+  readDirectory,
+} from "../lib/tauri";
+import {
+  AI_DEFAULTS,
+  generateCommitMessage,
+  STORAGE_KEYS as AI_STORAGE_KEYS,
+} from "../lib/ai";
 import type { GitFile, FileEntry, TreeItem } from "../types";
 
 interface SidebarProps {
@@ -11,6 +22,7 @@ interface SidebarProps {
   onRefresh: () => void;
   onStageFile: (path: string) => void;
   onDiscardFile: (path: string, status: string) => void;
+  onCommitDone: () => void;
   loading: boolean;
 }
 
@@ -37,6 +49,72 @@ const STATUS_COLOR: Record<string, string> = {
 // untracked 表示子树含未追踪文件
 type BubbleKind = "modified" | "untracked";
 
+// === AI Commit 栏内联图标与小组件 ===
+
+// 极简齿轮图标 14×14
+const GearIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+       stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="3" />
+    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+  </svg>
+);
+
+// 极简 sparkles 图标 14×14
+const SparklesIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+       stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1" />
+    <circle cx="12" cy="12" r="2" />
+  </svg>
+);
+
+// AI 加载三点动画
+const LoadingDots = () => (
+  <span className="inline-flex gap-0.5">
+    {[0, 1, 2].map((i) => (
+      <span
+        key={i}
+        className="w-1 h-1 rounded-full bg-current animate-pulse"
+        style={{ animationDelay: `${i * 150}ms` }}
+      />
+    ))}
+  </span>
+);
+
+// AI 设置抽屉的小字段(Label + Input 同行)
+const Field = ({
+  label,
+  value,
+  onChange,
+  placeholder,
+  type = "text",
+  inputRef,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  type?: string;
+  inputRef?: React.Ref<HTMLInputElement>;
+}) => (
+  <div className="flex items-center gap-2">
+    <label className="text-[11px] text-gray-500 w-20 flex-shrink-0">
+      {label}
+    </label>
+    <input
+      ref={inputRef}
+      type={type}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder={placeholder}
+      className="flex-1 min-w-0 bg-[#0B0F17]/60 border border-white/10 rounded
+                 px-2 py-1 text-[11px] font-mono text-ink-base
+                 placeholder:text-ink-muted focus:outline-none focus:border-white/20"
+    />
+  </div>
+);
+
 // 把 FileEntry 数组映射成 TreeItem 数组(初始全部折叠、未加载)
 const toTreeItems = (entries: FileEntry[]): TreeItem[] =>
   entries.map((e) => ({
@@ -54,12 +132,100 @@ export default function Sidebar({
   onRefresh,
   onStageFile,
   onDiscardFile,
+  onCommitDone,
   loading,
 }: SidebarProps) {
   const [picking, setPicking] = useState(false);
   const [tree, setTree] = useState<TreeItem[]>([]);
   const [treeLoading, setTreeLoading] = useState(false);
   const [treeError, setTreeError] = useState<string | null>(null);
+
+  // === AI Commit 栏 state ===
+  const [commitMessage, setCommitMessage] = useState("");
+  const [aiLoading, setAiLoading] = useState(false);
+  const [committing, setCommitting] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+
+  // AI 配置 —— 从 localStorage 初始化,任意字段变化立刻持久化
+  const [aiBaseUrl, setAiBaseUrl] = useState(
+    () => localStorage.getItem(AI_STORAGE_KEYS.baseUrl) ?? AI_DEFAULTS.baseUrl
+  );
+  const [aiApiKey, setAiApiKey] = useState(
+    () => localStorage.getItem(AI_STORAGE_KEYS.apiKey) ?? ""
+  );
+  const [aiModel, setAiModel] = useState(
+    () => localStorage.getItem(AI_STORAGE_KEYS.model) ?? AI_DEFAULTS.model
+  );
+
+  useEffect(() => {
+    localStorage.setItem(AI_STORAGE_KEYS.baseUrl, aiBaseUrl);
+  }, [aiBaseUrl]);
+  useEffect(() => {
+    localStorage.setItem(AI_STORAGE_KEYS.apiKey, aiApiKey);
+  }, [aiApiKey]);
+  useEffect(() => {
+    localStorage.setItem(AI_STORAGE_KEYS.model, aiModel);
+  }, [aiModel]);
+
+  // 用于 API Key 空时自动聚焦
+  const apiKeyInputRef = useRef<HTMLInputElement>(null);
+
+  const handleAiGenerate = async () => {
+    if (!repoPath || aiLoading) return;
+    // 🔒 防错拦截:API Key 为空时直接弹设置面板并聚焦 Key 输入框
+    if (!localStorage.getItem(AI_STORAGE_KEYS.apiKey)) {
+      setShowSettings(true);
+      setTimeout(() => apiKeyInputRef.current?.focus(), 50);
+      return;
+    }
+    setAiLoading(true);
+    try {
+      const diff = await getStagedDiff(repoPath);
+      if (!diff.trim()) {
+        await message("请先 Stage 留住文件", {
+          title: "暂存区为空",
+          kind: "info",
+        });
+        return;
+      }
+      const msg = await generateCommitMessage(diff);
+      setCommitMessage(msg);
+    } catch (e) {
+      console.error("AI 生成失败", e);
+      await message(`AI 生成失败:\n${String(e)}`, {
+        title: "错误",
+        kind: "error",
+      });
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  const handleCommit = async () => {
+    if (!repoPath || committing) return;
+    const msg = commitMessage.trim();
+    if (!msg) {
+      await message("请先输入 commit 信息", {
+        title: "提交信息为空",
+        kind: "warning",
+      });
+      return;
+    }
+    setCommitting(true);
+    try {
+      await executeCommit(repoPath, msg);
+      setCommitMessage("");
+      onCommitDone();
+    } catch (e) {
+      console.error("commit 失败", e);
+      await message(`提交失败:\n${String(e)}`, {
+        title: "错误",
+        kind: "error",
+      });
+    } finally {
+      setCommitting(false);
+    }
+  };
 
   // === 派生:把 CHANGES 的脏路径冒泡到祖先文件夹 + 文件自身 ===
   // map 的 key 是节点绝对路径(文件夹或文件,与 TreeItem.path 同形),
@@ -310,6 +476,100 @@ export default function Sidebar({
             })}
           </ul>
         )}
+      </div>
+
+      {/* === AI 智能 Commit 栏 + 设置抽屉 === */}
+      <div className="relative flex-shrink-0">
+        {showSettings && (
+          <div
+            className="absolute bottom-full left-0 w-full z-10
+                       bg-[#0B0F17]/95 backdrop-blur-sm
+                       border-t border-white/5 p-3
+                       flex flex-col gap-2 shadow-lg"
+          >
+            <Field
+              label="Base URL"
+              value={aiBaseUrl}
+              onChange={setAiBaseUrl}
+              placeholder={AI_DEFAULTS.baseUrl}
+            />
+            <Field
+              label="API Key"
+              type="password"
+              value={aiApiKey}
+              onChange={setAiApiKey}
+              placeholder="sk-..."
+              inputRef={apiKeyInputRef}
+            />
+            <Field
+              label="Model"
+              value={aiModel}
+              onChange={setAiModel}
+              placeholder={AI_DEFAULTS.model}
+            />
+          </div>
+        )}
+
+        <div className="flex flex-row items-center gap-2 p-2 border-t border-white/5">
+          <button
+            onClick={() => setShowSettings((s) => !s)}
+            title="AI 设置"
+            className={`flex-shrink-0 w-6 h-6 flex items-center justify-center rounded
+                       transition-colors
+                       ${
+                         showSettings
+                           ? "text-emerald-400 bg-white/[0.06]"
+                           : "text-ink-muted hover:text-white"
+                       }`}
+          >
+            <GearIcon />
+          </button>
+
+          <div className="relative flex-1">
+            <input
+              type="text"
+              value={commitMessage}
+              onChange={(e) => setCommitMessage(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  handleCommit();
+                }
+              }}
+              placeholder="输入 commit 信息,或点 ✦ AI 生成"
+              disabled={committing}
+              className="w-full bg-[#0B0F17]/60 border border-white/10 rounded-md
+                         pl-2 pr-8 py-1 text-[12px] font-mono text-ink-base
+                         placeholder:text-ink-muted focus:outline-none focus:border-white/20
+                         disabled:opacity-50"
+            />
+            {commitMessage === "" && !aiLoading && (
+              <button
+                onClick={handleAiGenerate}
+                title="AI 生成 commit 信息"
+                className="absolute right-2 top-1/2 -translate-y-1/2
+                           text-ink-muted hover:text-emerald-400 transition-colors"
+              >
+                <SparklesIcon />
+              </button>
+            )}
+            {aiLoading && (
+              <div className="absolute right-2 top-1/2 -translate-y-1/2 text-ink-muted">
+                <LoadingDots />
+              </div>
+            )}
+          </div>
+
+          <button
+            onClick={handleCommit}
+            disabled={committing || !commitMessage.trim()}
+            className="gel-box rounded-md px-3 py-1 text-xs font-bold text-ink-base
+                       hover:text-white transition-colors disabled:opacity-40
+                       flex-shrink-0"
+          >
+            {committing ? "提交中…" : "Commit"}
+          </button>
+        </div>
       </div>
     </aside>
   );

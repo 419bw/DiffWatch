@@ -162,6 +162,57 @@ pub fn read_file_diff(repo_path: &str, file_path: &str) -> Result<FileDiffData, 
     })
 }
 
+/// 获取当前已暂存区的全量 diff 文本(等价 `git diff --cached`)。
+/// unborn HEAD 自动退化(empty tree vs index),不报错 —— 仍然返回空字符串。
+pub fn get_staged_diff(repo_path: &str) -> Result<String, String> {
+    let repo = Repository::open(repo_path).map_err(|e| format!("打开仓库失败: {e}"))?;
+
+    // HEAD tree(若 unborn 则 None,git2 内部用空树兜底)
+    let head_tree = repo
+        .head()
+        .ok()
+        .and_then(|h| h.peel_to_commit().ok())
+        .and_then(|c| c.tree().ok());
+
+    let index = repo.index().map_err(|e| format!("读取索引失败: {e}"))?;
+
+    let diff = repo
+        .diff_tree_to_index(head_tree.as_ref(), Some(&index), None)
+        .map_err(|e| format!("计算 diff 失败: {e}"))?;
+
+    let mut output = String::new();
+    diff.print(git2::DiffFormat::Patch, |_delta, _hunk, line| {
+        output.push_str(std::str::from_utf8(line.content()).unwrap_or(""));
+        true
+    })
+    .map_err(|e| format!("序列化 diff 失败: {e}"))?;
+
+    Ok(output)
+}
+
+/// 把当前 index 落地为一次 commit。
+/// 自动从 repo config 读 user.name / user.email 构造签名;若未配置返回明确错误。
+/// unborn HEAD 也能正确处理(空 parents,生成 root commit)。
+pub fn execute_commit(repo_path: &str, message: &str) -> Result<(), String> {
+    let repo = Repository::open(repo_path).map_err(|e| format!("打开仓库失败: {e}"))?;
+    let mut index = repo.index().map_err(|e| format!("读取索引失败: {e}"))?;
+    let tree_id = index.write_tree().map_err(|e| format!("写入树失败: {e}"))?;
+    let tree = repo
+        .find_tree(tree_id)
+        .map_err(|e| format!("查找树失败: {e}"))?;
+
+    let sig = repo.signature().map_err(|e| {
+        format!("读取签名失败(请先 `git config user.name` 和 `user.email`): {e}")
+    })?;
+
+    let parent = repo.head().ok().and_then(|h| h.peel_to_commit().ok());
+    let parents: Vec<&git2::Commit> = parent.as_ref().map(|c| vec![c]).unwrap_or_default();
+
+    repo.commit(Some("HEAD"), &sig, &sig, message, &tree, &parents)
+        .map_err(|e| format!("提交失败: {e}"))?;
+    Ok(())
+}
+
 fn read_head_blob(repo: &Repository, file_path: &str) -> String {
     let head = match repo.head() {
         Ok(h) => h,

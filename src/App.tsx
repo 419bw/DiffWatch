@@ -80,6 +80,12 @@ export default function App() {
     [repoPath, refresh]
   );
 
+  // === Commit 完成后 refresh + 清空选中(diff 已落地 HEAD,旧内容不再有意义) ===
+  const handleCommitDone = useCallback(() => {
+    refresh();
+    setSelectedFile(null);
+  }, [refresh]);
+
   // === repoPath 变化时,启停 watchdog ===
   useEffect(() => {
     if (!repoPath) {
@@ -147,6 +153,7 @@ export default function App() {
           onRefresh={() => refresh()}
           onStageFile={handleStageFile}
           onDiscardFile={handleDiscardFile}
+          onCommitDone={handleCommitDone}
           loading={loading}
         />
       </div>

@@ -5,8 +5,9 @@
 //!     invoke('get_file_content', { repoPath: '...', filePath: '...' })
 
 use crate::git_ops::{
-    discard_file as discard_impl, list_changed_files, read_directory as read_dir_impl,
-    read_file_diff, stage_file as stage_impl, FileDiffData, FileEntry, GitFile,
+    discard_file as discard_impl, execute_commit as execute_commit_impl, list_changed_files,
+    read_directory as read_dir_impl, read_file_diff, stage_file as stage_impl, FileDiffData,
+    FileEntry, GitFile,
 };
 
 /// 获取仓库变更文件列表
@@ -37,4 +38,16 @@ pub fn stage_file(repo_path: String, file_path: String) -> Result<(), String> {
 #[tauri::command]
 pub fn discard_file(repo_path: String, file_path: String, status: String) -> Result<(), String> {
     discard_impl(&repo_path, &file_path, &status)
+}
+
+/// 获取当前暂存区的全量 diff 文本（等价 `git diff --cached`）
+#[tauri::command]
+pub fn get_staged_diff(repo_path: String) -> Result<String, String> {
+    crate::git_ops::get_staged_diff(&repo_path)
+}
+
+/// 用给定的 message 提交当前暂存区
+#[tauri::command]
+pub fn execute_commit(repo_path: String, message: String) -> Result<(), String> {
+    execute_commit_impl(&repo_path, &message)
 }
