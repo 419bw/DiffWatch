@@ -525,7 +525,7 @@ export default function Sidebar({
         >
           Changes ({changesFiles.length})
           <div
-            className={`h-px mt-1.5 ${
+            className={`h-px mt-1.5 transition-all duration-200 ease-out ${
               activeTab === "changes" ? "bg-emerald-500" : "bg-transparent"
             }`}
           />
@@ -540,7 +540,7 @@ export default function Sidebar({
         >
           Staged ({stagedFiles.length})
           <div
-            className={`h-px mt-1.5 ${
+            className={`h-px mt-1.5 transition-all duration-200 ease-out ${
               activeTab === "staged" ? "bg-emerald-500" : "bg-transparent"
             }`}
           />
@@ -561,6 +561,7 @@ export default function Sidebar({
                     key={f.path}
                     onClick={() => onSelectFile(f.path)}
                     className={`group flex items-center h-[26px] px-2 text-[12px] font-mono rounded-sm cursor-pointer
+                                transition-colors duration-150 ease-in-out
                       ${
                         isSelected
                           ? "bg-[#202430] text-white"
@@ -582,7 +583,7 @@ export default function Sidebar({
                     </span>
 
                     {/* Hover 动作条 — flex 子项,展开时把文件名往左挤,绝不覆盖 */}
-                    <div className="flex-shrink-0 ml-0 group-hover:ml-2 max-w-0 group-hover:max-w-[160px] overflow-hidden opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto transition-all duration-75 flex items-center gap-1.5">
+                    <div className="flex-shrink-0 ml-0 group-hover:ml-2 max-w-0 group-hover:max-w-[160px] overflow-hidden opacity-0 -translate-x-1 filter blur-[1px] group-hover:opacity-100 group-hover:translate-x-0 group-hover:filter-none pointer-events-none group-hover:pointer-events-auto transition-all duration-150 flex items-center gap-1.5">
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -623,6 +624,7 @@ export default function Sidebar({
                   key={f.path}
                   onClick={() => onSelectFile(f.path)}
                   className={`group flex items-center h-[26px] px-2 text-[12px] font-mono rounded-sm cursor-pointer
+                              transition-colors duration-150 ease-in-out
                     ${
                       isSelected
                         ? "bg-[#202430] text-white"
@@ -641,7 +643,7 @@ export default function Sidebar({
                   </span>
 
                   {/* Hover 动作条 —— Staged 专属 ↺ Unstage 单按钮 */}
-                  <div className="flex-shrink-0 ml-0 group-hover:ml-2 max-w-0 group-hover:max-w-[110px] overflow-hidden opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto transition-all duration-75 flex items-center">
+                  <div className="flex-shrink-0 ml-0 group-hover:ml-2 max-w-0 group-hover:max-w-[110px] overflow-hidden opacity-0 -translate-x-1 filter blur-[1px] group-hover:opacity-100 group-hover:translate-x-0 group-hover:filter-none pointer-events-none group-hover:pointer-events-auto transition-all duration-150 flex items-center">
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
@@ -662,41 +664,43 @@ export default function Sidebar({
 
       {/* === AI 智能 Commit 栏 + 设置抽屉 === */}
       <div className="relative flex-shrink-0">
-        {showSettings && (
-          <div
-            className="absolute bottom-full left-0 w-full z-10
-                       bg-[#161920]
-                       border-t border-[#262B37] p-3
-                       flex flex-col gap-2 shadow-lg"
-          >
-            <Field
-              label="Base URL"
-              value={aiBaseUrl}
-              onChange={setAiBaseUrl}
-              placeholder={AI_DEFAULTS.baseUrl}
-            />
-            <Field
-              label="API Key"
-              type="password"
-              value={aiApiKey}
-              onChange={setAiApiKey}
-              placeholder="sk-..."
-              inputRef={apiKeyInputRef}
-            />
-            <Field
-              label="Model"
-              value={aiModel}
-              onChange={setAiModel}
-              placeholder={AI_DEFAULTS.model}
-            />
-          </div>
-        )}
+        {/* 抽屉常驻 DOM,通过类名切换显隐 + 滑入动画(200ms ease-out) */}
+        <div
+          className={`absolute bottom-full left-0 w-full z-10
+                      bg-[#161920] border-t border-[#262B37] p-3
+                      flex flex-col gap-2 shadow-lg
+                      transition-all duration-200 ease-out
+                      ${showSettings
+                        ? "translate-y-0 opacity-100 pointer-events-auto scale-100"
+                        : "translate-y-2 opacity-0 pointer-events-none scale-[0.99]"}`}
+        >
+          <Field
+            label="Base URL"
+            value={aiBaseUrl}
+            onChange={setAiBaseUrl}
+            placeholder={AI_DEFAULTS.baseUrl}
+          />
+          <Field
+            label="API Key"
+            type="password"
+            value={aiApiKey}
+            onChange={setAiApiKey}
+            placeholder="sk-..."
+            inputRef={apiKeyInputRef}
+          />
+          <Field
+            label="Model"
+            value={aiModel}
+            onChange={setAiModel}
+            placeholder={AI_DEFAULTS.model}
+          />
+        </div>
 
         {/* 外凹槽:刻意比侧栏壳 #161920 更暗一档,营造凹陷轨道 */}
         <div className="p-2 border-t border-[#262B37] bg-[#13161C]">
           {/* 内卡:聚焦色 #1C1F26,浮于外凹槽之上 */}
           <div className="flex flex-col w-full bg-[#1C1F26] border border-[#262B37] rounded-md p-2
-                          focus-within:border-zinc-700 transition-colors">
+                          focus-within:border-zinc-700 transition-all duration-200 ease-out">
 
             {/* 顶层:纯净 textarea —— 边框/bg 全由内卡提供 */}
             <textarea
@@ -736,7 +740,7 @@ export default function Sidebar({
                     onClick={handleAiGenerate}
                     title="AI 生成 commit 信息"
                     className="text-[11px] font-medium text-gray-500 hover:text-emerald-400
-                               transition-colors flex items-center gap-0.5"
+                               transition-colors duration-200 flex items-center gap-0.5"
                   >
                     <SparklesIcon />
                     AI 生成
@@ -839,7 +843,7 @@ function TreeNodeView({
     <div>
       <div
         className={`group flex items-center h-7 gap-2 pr-2 py-0.5 rounded-sm
-                    hover:bg-white/[0.03] transition-colors cursor-pointer
+                    hover:bg-white/[0.03] transition-colors duration-150 ease-in-out cursor-pointer
                     ${baseText} ${hoverText}`}
         style={{ paddingLeft: 8 + depth * 16 }}
         onClick={handleClick}
