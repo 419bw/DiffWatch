@@ -6,9 +6,9 @@
 
 use crate::git_ops::{
     discard_file as discard_impl, execute_commit as execute_commit_impl, list_changed_files,
-    open_in_vscode as open_in_vscode_impl, read_directory as read_dir_impl, read_file_diff,
-    read_workspace_file as read_workspace_impl, stage_file as stage_impl,
-    unstage_file as unstage_impl, FileDiffData, FileEntry, GitFile,
+    open_in_vscode as open_in_vscode_impl, patch_file_line as patch_file_line_impl,
+    read_directory as read_dir_impl, read_file_diff, read_workspace_file as read_workspace_impl,
+    stage_file as stage_impl, unstage_file as unstage_impl, FileDiffData, FileEntry, GitFile,
 };
 
 /// 获取仓库变更文件列表
@@ -69,4 +69,15 @@ pub fn read_workspace_file(file_path: String) -> Result<String, String> {
 #[tauri::command]
 pub fn open_in_vscode(file_path: String) -> Result<(), String> {
     open_in_vscode_impl(&file_path)
+}
+
+/// 流式单行修补 —— 用于查看器内双击编辑落盘
+#[tauri::command]
+pub fn patch_file_line(
+    repo_path: String,
+    file_path: String,
+    line_num: usize,
+    new_content: String,
+) -> Result<(), String> {
+    patch_file_line_impl(&repo_path, &file_path, line_num, &new_content)
 }

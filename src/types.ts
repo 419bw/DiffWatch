@@ -1,4 +1,12 @@
 // 与 Rust 端 serde 结构保持一致（snake_case）
+
+// === 全局桥接:Line Patcher 单行落盘后由 VirtualFileViewer 调用,触发 App.tsx 整体重拉 ===
+declare global {
+  interface Window {
+    __REFRESH_GLOBAL__?: () => void;
+  }
+}
+
 export interface GitFile {
   path: string;
   /** 'modified' | 'untracked' | 'deleted' | 'staged' | 'renamed' | 'typechange' */

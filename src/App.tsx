@@ -21,6 +21,8 @@ export default function App() {
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   // viewer 模式路径 —— 与 selectedFile 互斥,任一时刻只有一个非空
   const [viewerPath, setViewerPath] = useState<string | null>(null);
+  // viewer 重拉信号 —— patch 落盘后或外部刷新时 +1,触发 DiffPanel viewer effect 重读
+  const [viewerRefreshKey, setViewerRefreshKey] = useState(0);
   const [loading, setLoading] = useState(false);
   /**
    * 外部文件变更时 +1,作为 DiffPanel 的 useEffect 依赖,触发 diff 重拉。
@@ -41,6 +43,8 @@ export default function App() {
       } finally {
         setLoading(false);
       }
+      // 顺手触发 viewer 重拉 —— 单行 patch 落盘 / 仓库外部修改后用户期望内容立即更新
+      setViewerRefreshKey((k) => k + 1);
     },
     [repoPath]
   );
@@ -126,6 +130,15 @@ export default function App() {
     [repoPath, refresh]
   );
 
+  // === 暴露全局 refresh 入口给 VirtualFileViewer 的 inline input 用 ===
+  // Line Patcher 落盘后,inline input 调 window.__REFRESH_GLOBAL__() 触发整体重拉
+  useEffect(() => {
+    window.__REFRESH_GLOBAL__ = refresh;
+    return () => {
+      delete window.__REFRESH_GLOBAL__;
+    };
+  }, [refresh]);
+
   // === repoPath 变化时,启停 watchdog ===
   useEffect(() => {
     if (!repoPath) {
@@ -209,6 +222,7 @@ export default function App() {
             filePath={selectedFile ?? ""}
             refreshKey={diffRefreshKey}
             viewerPath={viewerPath}
+            viewerRefreshKey={viewerRefreshKey}
           />
         ) : (
           <EmptyState />

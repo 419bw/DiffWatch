@@ -64,3 +64,12 @@ export const readWorkspaceFile = (filePath: string) =>
 /** 用 VS Code 打开文件。code 不存在时静默降级(后端 Ok(())),前端 catch 后无副作用。 */
 export const openInVscode = (filePath: string) =>
   invoke<void>("open_in_vscode", { filePath });
+
+/** 流式单行修补 —— 查看器内双击编辑落盘。line_num 为 1-indexed。 */
+export const patchFileLine = (
+  repoPath: string,
+  filePath: string,
+  lineNum: number,
+  newContent: string
+) =>
+  invoke<void>("patch_file_line", { repoPath, filePath, lineNum, newContent });

@@ -5,7 +5,7 @@
 use git2::{Repository, StatusOptions};
 use serde::Serialize;
 use std::fs;
-use std::io::Read;
+use std::io::{BufRead, BufReader, BufWriter, Read, Write};
 use std::path::{Path, PathBuf};
 
 /// 仓库中某个变更文件的摘要
@@ -405,5 +405,66 @@ pub fn open_in_vscode(file_path: &str) -> Result<(), String> {
 
     // 异步拉起进程,吞掉错误实现安全降级
     let _ = cmd.arg(file_path).spawn();
+    Ok(())
+}
+
+/// 流式单行修补 —— BufReader + BufWriter 逐行扫描,精准替换单行后 fs::rename 原子覆盖。
+/// 内存中仅保留 1 行 buffer + 临时文件 IO,即使 50MB 大文件改一行也只占 KB 级内存。
+/// line_num 为 1-indexed(与编辑器习惯一致);0 显式拦截,越界走 silent no-op。
+pub fn patch_file_line(
+    repo_path: &str,
+    file_path: &str,
+    line_num: usize,
+    new_content: &str,
+) -> Result<(), String> {
+    if line_num == 0 {
+        return Err("line_num 必须 >= 1(1-indexed)".to_string());
+    }
+
+    // 锁死原文件绝对路径
+    let src = Path::new(repo_path).join(file_path);
+    // 同目录临时文件 —— with_extension("tmp") 替换最后一段扩展名
+    // foo.txt → foo.tmp;README → .tmp;无扩展名也安全
+    let tmp = src.with_extension("tmp");
+
+    let file = fs::File::open(&src).map_err(|e| format!("打开原文件失败: {e}"))?;
+    let reader = BufReader::new(file);
+    let out = fs::File::create(&tmp).map_err(|e| format!("创建临时文件失败: {e}"))?;
+    let mut writer = BufWriter::new(out);
+
+    let mut current_line: usize = 0;
+    let mut stream = reader.lines();
+
+    while let Some(line) = stream.next() {
+        let line = line.map_err(|e| format!("读取失败: {e}"))?;
+        current_line += 1;
+
+        if current_line == line_num {
+            // 精准狙击:写 new_content,末尾补 \n(如果 new_content 不带换行)
+            writer
+                .write_all(new_content.as_bytes())
+                .map_err(|e| format!("写入失败: {e}"))?;
+            if !new_content.ends_with('\n') {
+                writer.write_all(b"\n").map_err(|e| format!("写入换行失败: {e}"))?;
+            }
+        } else {
+            // 其余行原封不动穿梭 —— BufReader::lines() 已剥离行尾换行,这里补回
+            writer
+                .write_all(line.as_bytes())
+                .map_err(|e| format!("写入失败: {e}"))?;
+            writer
+                .write_all(b"\n")
+                .map_err(|e| format!("写入换行失败: {e}"))?;
+        }
+    }
+
+    // 强制刷盘 + 原子覆盖
+    writer.flush().map_err(|e| format!("刷盘失败: {e}"))?;
+    drop(writer); // 先关 BufWriter(Windows 上 rename 之前必须 drop)
+
+    fs::rename(&tmp, &src).map_err(|e| format!("覆盖原文件失败: {e}"))?;
+
+    // 越界检查:如果 line_num > 总行数,临时文件是原内容副本,rename 后原文件不变(silent no-op)
+    // line_num == 0 在函数顶部已拦截
     Ok(())
 }

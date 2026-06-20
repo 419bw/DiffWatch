@@ -5,7 +5,7 @@ import type { DiffHighlighter } from "@git-diff-view/shiki";
 import { createHighlighter } from "shiki";
 import { createTwoFilesPatch } from "diff";
 import "@git-diff-view/react/styles/diff-view.css";
-import { getFileContent, readWorkspaceFile } from "../lib/tauri";
+import { getFileContent, patchFileLine, readWorkspaceFile } from "../lib/tauri";
 import type { FileDiffData } from "../types";
 
 // 自建 shiki highlighter —— 直接走 defaultColor: true,产出内联 color:#xxx,
@@ -72,9 +72,17 @@ interface DiffPanelProps {
   refreshKey: number;
   /** Viewer 模式路径(只读查看)—— 与 filePath 互斥,任一时刻只有一个非空 */
   viewerPath: string | null;
+  /** Viewer 模式重拉信号 —— App.tsx 在 patch 落盘后 +1,触发 viewer effect 重读 */
+  viewerRefreshKey: number;
 }
 
-export default function DiffPanel({ repoPath, filePath, refreshKey, viewerPath }: DiffPanelProps) {
+export default function DiffPanel({
+  repoPath,
+  filePath,
+  refreshKey,
+  viewerPath,
+  viewerRefreshKey,
+}: DiffPanelProps) {
   const [highlighter, setHighlighter] = useState<DiffHighlighter | null>(null);
   const [diffData, setDiffData] = useState<FileDiffData | null>(null);
   const [loading, setLoading] = useState(false);
@@ -153,7 +161,7 @@ export default function DiffPanel({ repoPath, filePath, refreshKey, viewerPath }
     return () => {
       cancelled = true;
     };
-  }, [viewerPath]);
+  }, [viewerPath, viewerRefreshKey]);
 
   // === Viewer 模式优先(viewerPath 非空时,完全不渲染 diff 模式分支) ===
   if (viewerPath) {
@@ -197,7 +205,11 @@ export default function DiffPanel({ repoPath, filePath, refreshKey, viewerPath }
       return (
         <div className="flex flex-col h-full bg-[#0A0D14]">
           {viewerHeader}
-          <VirtualFileViewer content={viewerContent} />
+          <VirtualFileViewer
+            content={viewerContent}
+            repoPath={repoPath}
+            filePath={viewerPath}
+          />
         </div>
       );
     }
@@ -337,16 +349,29 @@ export default function DiffPanel({ repoPath, filePath, refreshKey, viewerPath }
   );
 }
 
-// === Viewer 子组件 1:虚拟滚动纯文本查看器 ===
+// === Viewer 子组件 1:虚拟滚动纯文本查看器(支持就地单行修补) ===
 // 行高固定 24px = h-6,只渲染视窗可见行 + 上下各 10 行 buffer
 // ResizeObserver 监听容器高度,浏览器窗口大小变化时自动重算可见行数
-function VirtualFileViewer({ content }: { content: string }) {
+// 双击任意行 → 行内 input → Enter 落盘(patch_file_line) → 全局 refresh 重拉
+function VirtualFileViewer({
+  content,
+  repoPath,
+  filePath,
+}: {
+  content: string;
+  repoPath: string;
+  filePath: string;
+}) {
   const LINE_HEIGHT = 24; // h-6 = 24px,与 Tailwind h-6 对齐
   const BUFFER = 10; // 上下各多渲染 10 行,滚到边缘不空白
 
   const containerRef = useRef<HTMLDivElement>(null);
   const [scrollTop, setScrollTop] = useState(0);
   const [containerH, setContainerH] = useState(0);
+
+  // === 单行编辑态 ===
+  const [editingLineIdx, setEditingLineIdx] = useState<number | null>(null);
+  const [editingText, setEditingText] = useState<string>("");
 
   // 拆分行为常驻内存(几百 KB 文本 split 后 ~几 MB,可控)
   const lines = useMemo(() => content.split("\n"), [content]);
@@ -371,6 +396,12 @@ function VirtualFileViewer({ content }: { content: string }) {
     return () => ro.disconnect();
   }, []);
 
+  // 切换文件时强制清空编辑态(避免跨文件残留)
+  useEffect(() => {
+    setEditingLineIdx(null);
+    setEditingText("");
+  }, [filePath]);
+
   return (
     <div
       ref={containerRef}
@@ -380,12 +411,59 @@ function VirtualFileViewer({ content }: { content: string }) {
       <div style={{ height: paddingTop }} />
       {lines.slice(startIdx, endIdx).map((line, i) => {
         const idx = startIdx + i;
+        const isEditing = idx === editingLineIdx;
         return (
-          <div key={idx} className="flex h-6 hover:bg-white/[0.02]">
+          <div
+            key={idx}
+            className="flex h-6 hover:bg-white/[0.02] group"
+            onDoubleClick={() => {
+              if (isEditing) return;
+              setEditingLineIdx(idx);
+              setEditingText(line);
+            }}
+          >
             <span className="w-12 flex-shrink-0 text-right pr-3 text-zinc-600 select-none">
               {idx + 1}
             </span>
-            <span className="flex-1 whitespace-pre pl-2 leading-6">{line || " "}</span>
+            {isEditing ? (
+              <input
+                autoFocus
+                type="text"
+                value={editingText}
+                onChange={(e) => setEditingText(e.target.value)}
+                onKeyDown={async (e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    const saved = editingText;
+                    setEditingLineIdx(null); // 立即关闭编辑态(视觉秒级响应)
+                    try {
+                      // 1-indexed 转换:idx (0-indexed) + 1
+                      await patchFileLine(repoPath, filePath, idx + 1, saved);
+                      // 触发全局 refresh —— 刷新 git status + viewer 内容
+                      window.__REFRESH_GLOBAL__?.();
+                    } catch (err) {
+                      console.error("[LinePatch] 落盘失败:", err);
+                    }
+                  } else if (e.key === "Escape") {
+                    e.preventDefault();
+                    setEditingLineIdx(null);
+                    setEditingText("");
+                  }
+                }}
+                onBlur={() => {
+                  // 失焦自动取消编辑(避免 input 残留半截内容)
+                  setEditingLineIdx(null);
+                  setEditingText("");
+                }}
+                className="flex-1 bg-[#202430] border border-zinc-700 text-zinc-200
+                           text-[12px] font-mono px-1.5 py-0 rounded
+                           outline-none h-5"
+              />
+            ) : (
+              <span className="flex-1 whitespace-pre pl-2 leading-6">
+                {line || " "}
+              </span>
+            )}
           </div>
         );
       })}
