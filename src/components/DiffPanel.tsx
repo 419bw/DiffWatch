@@ -1,10 +1,69 @@
 import { useEffect, useState } from "react";
 import { DiffView, DiffModeEnum } from "@git-diff-view/react";
-import { getDiffViewHighlighter } from "@git-diff-view/shiki";
+import { processAST } from "@git-diff-view/shiki";
+import type { DiffHighlighter } from "@git-diff-view/shiki";
+import { createHighlighter } from "shiki";
 import { createTwoFilesPatch } from "diff";
 import "@git-diff-view/react/styles/diff-view.css";
 import { getFileContent } from "../lib/tauri";
 import type { FileDiffData } from "../types";
+
+// 自建 shiki highlighter —— 直接走 defaultColor: true,产出内联 color:#xxx,
+// 绕开 @git-diff-view/shiki 默认的 cssVariablePrefix 模式(CSS 变量方案在 split
+// 模式下右栏不稳)。语言集覆盖 src-tauri/src/git_ops.rs::guess_lang 全部返回值
+// 加上前端的 "text" fallback 与几个保险 lang。
+// shiki 的 langs 接受 (BundledLanguage | SpecialLanguage),用宽松 string[] 类型避免 TS 联合类型严格报错
+const SHIKI_LANGS: string[] = [
+  // guess_lang 全部 id
+  "typescript", "javascript", "tsx", "jsx",
+  "rust", "python", "go", "java", "c", "cpp", "csharp",
+  "ruby", "php", "kotlin", "swift", "scala",
+  "bash", "powershell",
+  "json", "yaml", "toml", "xml",
+  "html", "css", "scss", "less", "markdown",
+  "sql", "lua", "vue", "svelte", "dockerfile",
+  // 前端 fallback("text" 是 SpecialLanguage,shiki v3 的 PlainTextLanguage) + 保险 lang
+  "text", "diff", "astro",
+];
+
+const buildInlineHighlighter = async (): Promise<DiffHighlighter> => {
+  const shikiHighlighter = await createHighlighter({
+    themes: ["github-dark"],
+    langs: SHIKI_LANGS,
+  });
+  return {
+    name: "shiki-inline",
+    // "style" 而非 "class":@git-diff-view/react 的 getSyntaxDiffTemplate 对
+    // type === "class" 会缓存模板(用 syntaxTemplateName 比对);"style" 每次重
+    // 建,确保 split 两侧的 inner-span 颜色都生效
+    type: "style",
+    maxLineToIgnoreSyntax: 2000,
+    setMaxLineToIgnoreSyntax: () => {},
+    ignoreSyntaxHighlightList: [],
+    setIgnoreSyntaxHighlightList: () => {},
+    getAST: (raw, _fileName, lang) => {
+      try {
+        return shikiHighlighter.codeToHast(raw, {
+          lang: (lang ?? "text") as any,
+          theme: "github-dark",
+          // 关键:defaultColor 接受 true(运行时 truthy 走内联 color),
+          // 但 TS 类型只允许 false|"light"|"dark"|"light-dark()"。运行时 true
+          // 会产出 inline color:#xxx,完全绕开 CSS 变量路径,避免 split 右栏丢色
+          defaultColor: true as any,
+          mergeWhitespaces: false,
+        });
+      } catch (e) {
+        // 未知 lang 等场景静默降级,DiffFile 那边有 if (!this.ast) return 兜底
+        console.warn("[DiffPanel] shiki codeToHast failed:", e);
+        return undefined as any;
+      }
+    },
+    processAST,
+    hasRegisteredCurrentLang: (lang) =>
+      shikiHighlighter.getLoadedLanguages().includes(lang),
+    getHighlighterEngine: () => shikiHighlighter as any,
+  };
+};
 
 interface DiffPanelProps {
   repoPath: string;
@@ -14,18 +73,18 @@ interface DiffPanelProps {
 }
 
 export default function DiffPanel({ repoPath, filePath, refreshKey }: DiffPanelProps) {
-  const [highlighter, setHighlighter] = useState<any>(null);
+  const [highlighter, setHighlighter] = useState<DiffHighlighter | null>(null);
   const [diffData, setDiffData] = useState<FileDiffData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [mode, setMode] = useState<DiffModeEnum>(DiffModeEnum.SplitGitHub);
 
-  // 初始化 shiki highlighter（只跑一次）
-  // getDiffViewHighlighter 内部已经默认 bundle 了 github-light + github-dark,
-  // 所以切 diffViewTheme="dark" 时,语法高亮会自动走 github-dark 主题。
+  // 初始化 shiki highlighter（只跑一次）—— 用自建 buildInlineHighlighter
+  // 走 defaultColor: true,产出内联 color:#xxx,绕开 @git-diff-view/shiki
+  // 默认 cssVariablePrefix 方案在 split 模式右栏不稳的 bug
   useEffect(() => {
     let mounted = true;
-    getDiffViewHighlighter().then((h) => {
+    buildInlineHighlighter().then((h) => {
       if (mounted) setHighlighter(h);
     });
     return () => {
