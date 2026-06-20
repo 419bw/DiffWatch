@@ -3,7 +3,7 @@
 
 const MAX_DIFF_CHARS = 12_000;
 /** fetch 超时阈值(毫秒) —— 防止 Base URL 错误或网络极差时 fetch 挂死,LoadingDots 永远转 */
-const FETCH_TIMEOUT_MS = 15_000;
+const FETCH_TIMEOUT_MS = 30_000;
 
 const DEFAULT_BASE_URL = "https://api.deepseek.com/v1";
 const DEFAULT_MODEL = "deepseek-chat";
@@ -24,7 +24,7 @@ function truncateDiff(s: string): string {
   return s.slice(0, MAX_DIFF_CHARS) + "\n\n...(diff truncated)...";
 }
 
-/** 生成 commit 信息 —— 全部配置从 localStorage 动态取,带 15s AbortController 超时 */
+/** 生成 commit 信息 —— 全部配置从 localStorage 动态取,带 30s AbortController 超时 */
 export async function generateCommitMessage(diff: string): Promise<string> {
   const apiKey = localStorage.getItem(STORAGE_KEYS.apiKey) ?? "";
   const baseUrl = (
@@ -74,8 +74,9 @@ export async function generateCommitMessage(diff: string): Promise<string> {
         messages: [{ role: "user", content: prompt }],
         temperature: 0.3,
         // reasoning 模型(DeepSeek-R1/Flash 等)需要给推理留 2-3x token 预算,
-        // 否则 finish_reason=length 截断 → content 为空。1000 留 600 推理 + 400 输出。
-        max_tokens: 1000,
+        // 否则 finish_reason=length 截断 → content 为空。2000 留 ~1200 推理 + ~800 输出,
+        // 覆盖稍微大一点的改动也能输出完整 commit 信息。
+        max_tokens: 2000,
       }),
       signal: controller.signal,
     });
