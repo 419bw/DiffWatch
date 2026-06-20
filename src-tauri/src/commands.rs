@@ -6,7 +6,8 @@
 
 use crate::git_ops::{
     discard_file as discard_impl, execute_commit as execute_commit_impl, list_changed_files,
-    read_directory as read_dir_impl, read_file_diff, stage_file as stage_impl,
+    open_in_vscode as open_in_vscode_impl, read_directory as read_dir_impl, read_file_diff,
+    read_workspace_file as read_workspace_impl, stage_file as stage_impl,
     unstage_file as unstage_impl, FileDiffData, FileEntry, GitFile,
 };
 
@@ -56,4 +57,16 @@ pub fn execute_commit(repo_path: String, message: String) -> Result<(), String> 
 #[tauri::command]
 pub fn unstage_file(repo_path: String, file_path: String) -> Result<(), String> {
     unstage_impl(&repo_path, &file_path)
+}
+
+/// 读取工作区单个文件(只读查看器)。二进制返回 BINARY_FILE_DETECTED。
+#[tauri::command]
+pub fn read_workspace_file(file_path: String) -> Result<String, String> {
+    read_workspace_impl(&file_path)
+}
+
+/// 用 VS Code 打开文件。code 命令不存在时静默降级。
+#[tauri::command]
+pub fn open_in_vscode(file_path: String) -> Result<(), String> {
+    open_in_vscode_impl(&file_path)
 }

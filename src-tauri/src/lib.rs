@@ -19,6 +19,8 @@ pub fn run() {
             commands::unstage_file,
             commands::get_staged_diff,
             commands::execute_commit,
+            commands::read_workspace_file,
+            commands::open_in_vscode,
             watcher::start_watching,
             watcher::stop_watching,
         ])

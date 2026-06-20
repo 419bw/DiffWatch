@@ -5,6 +5,7 @@
 use git2::{Repository, StatusOptions};
 use serde::Serialize;
 use std::fs;
+use std::io::Read;
 use std::path::{Path, PathBuf};
 
 /// 仓库中某个变更文件的摘要
@@ -366,4 +367,43 @@ pub fn read_directory(dir_path: &str) -> Result<Vec<FileEntry>, String> {
             }
         })
         .collect())
+}
+
+/// 读取单个工作区文件(只读查看器用)。
+/// 二进制拦截:打开后读前 1024 字节,遇 \0 立即返回 BINARY_FILE_DETECTED。
+/// 通过后用 fs::read_to_string 全量读取,经 normalize_eol 规范化行尾。
+pub fn read_workspace_file(file_path: &str) -> Result<String, String> {
+    let path = Path::new(file_path);
+
+    // 1. 打开文件 + 读取前 1024 字节做二进制嗅探
+    let mut file = fs::File::open(path).map_err(|e| format!("打开文件失败: {e}"))?;
+    let mut sniff = [0u8; 1024];
+    let n = file
+        .read(&mut sniff)
+        .map_err(|e| format!("读取文件失败: {e}"))?;
+    if sniff[..n].contains(&0u8) {
+        return Err("BINARY_FILE_DETECTED".to_string());
+    }
+
+    // 2. 文本安全,全量读取并规范化行尾
+    let raw = fs::read_to_string(path).map_err(|e| format!("读取文件失败: {e}"))?;
+    Ok(normalize_eol(&raw))
+}
+
+/// 用 `code <path>` 静默唤起 VS Code。
+/// 完美兼容 Windows (处理 code.cmd 批处理) 与 Unix 系统,执行失败时静默降级。
+pub fn open_in_vscode(file_path: &str) -> Result<(), String> {
+    use std::process::Command;
+
+    #[cfg(target_os = "windows")]
+    let mut cmd = Command::new("cmd");
+    #[cfg(target_os = "windows")]
+    cmd.args(["/C", "code"]);
+
+    #[cfg(not(target_os = "windows"))]
+    let mut cmd = Command::new("code");
+
+    // 异步拉起进程,吞掉错误实现安全降级
+    let _ = cmd.arg(file_path).spawn();
+    Ok(())
 }

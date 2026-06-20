@@ -56,3 +56,11 @@ export async function confirmDiscard(filePath: string): Promise<boolean> {
     { title: "丢弃改动", kind: "warning", okLabel: "丢弃", cancelLabel: "取消" }
   );
 }
+
+/** 读取单个工作区文件(只读查看器)。二进制返回 BINARY_FILE_DETECTED 错误。 */
+export const readWorkspaceFile = (filePath: string) =>
+  invoke<string>("read_workspace_file", { filePath });
+
+/** 用 VS Code 打开文件。code 不存在时静默降级(后端 Ok(())),前端 catch 后无副作用。 */
+export const openInVscode = (filePath: string) =>
+  invoke<void>("open_in_vscode", { filePath });

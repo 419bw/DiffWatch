@@ -7,6 +7,7 @@ import {
   confirmDiscard,
   discardFile,
   getGitStatus,
+  openInVscode,
   stageFile,
   startWatching,
   stopWatching,
@@ -18,6 +19,8 @@ export default function App() {
   const [repoPath, setRepoPath] = useState<string | null>(null);
   const [files, setFiles] = useState<GitFile[]>([]);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
+  // viewer 模式路径 —— 与 selectedFile 互斥,任一时刻只有一个非空
+  const [viewerPath, setViewerPath] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   /**
    * 外部文件变更时 +1,作为 DiffPanel 的 useEffect 依赖,触发 diff 重拉。
@@ -45,8 +48,29 @@ export default function App() {
   const handleSelectRepo = (path: string) => {
     setRepoPath(path);
     setSelectedFile(null);
+    setViewerPath(null);
     refresh(path);
   };
+
+  // === 双模态互斥切换 ===
+  // 进入 diff 模式:清 viewer,设 selectedFile
+  const handleSelectFile = useCallback((path: string) => {
+    setViewerPath(null);
+    setSelectedFile(path);
+  }, []);
+  // 进入 viewer 模式:清 selectedFile,设 viewerPath
+  const handleReadOnlyFile = useCallback((path: string) => {
+    setSelectedFile(null);
+    setViewerPath(path);
+  }, []);
+  // 双击唤起 VS Code;code 不存在时后端静默降级 Ok(()),前端 catch 也无副作用
+  const handleOpenInVscode = useCallback(async (path: string) => {
+    try {
+      await openInVscode(path);
+    } catch {
+      /* 静默 */
+    }
+  }, []);
 
   // === Stage / Discard 操作闭环 ===
   // 手动 refresh() 是立即的兜底,watcher 的 repo-changed 几百毫秒后也会再触发一次,
@@ -81,10 +105,11 @@ export default function App() {
     [repoPath, refresh]
   );
 
-  // === Commit 完成后 refresh + 清空选中(diff 已落地 HEAD,旧内容不再有意义) ===
+  // === Commit 完成后 refresh + 清空选中(diff 已落地 HEAD,旧内容不再有意义;viewer 也清) ===
   const handleCommitDone = useCallback(() => {
     refresh();
     setSelectedFile(null);
+    setViewerPath(null);
   }, [refresh]);
 
   // === Unstage 操作 — 把文件从暂存区撤回,refresh 后自动归位到 CHANGES tab ===
@@ -164,7 +189,9 @@ export default function App() {
           files={files}
           selectedFile={selectedFile}
           onSelectRepo={handleSelectRepo}
-          onSelectFile={setSelectedFile}
+          onSelectFile={handleSelectFile}
+          onReadOnlyFile={handleReadOnlyFile}
+          onOpenInVscode={handleOpenInVscode}
           onRefresh={() => refresh()}
           onStageFile={handleStageFile}
           onDiscardFile={handleDiscardFile}
@@ -176,11 +203,12 @@ export default function App() {
 
       {/* 右栏:吃满剩余宽度,无圆角无内边距,直接展示代码 */}
       <main className="flex-1 min-w-0 h-full overflow-hidden">
-        {repoPath && selectedFile ? (
+        {repoPath && (selectedFile || viewerPath) ? (
           <DiffPanel
             repoPath={repoPath}
-            filePath={selectedFile}
+            filePath={selectedFile ?? ""}
             refreshKey={diffRefreshKey}
+            viewerPath={viewerPath}
           />
         ) : (
           <EmptyState />

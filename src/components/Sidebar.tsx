@@ -19,6 +19,8 @@ interface SidebarProps {
   selectedFile: string | null;
   onSelectRepo: (path: string) => void;
   onSelectFile: (path: string) => void;
+  onReadOnlyFile: (path: string) => void;
+  onOpenInVscode: (path: string) => void;
   onRefresh: () => void;
   onStageFile: (path: string) => void;
   onDiscardFile: (path: string, status: string) => void;
@@ -199,6 +201,8 @@ export default function Sidebar({
   selectedFile,
   onSelectRepo,
   onSelectFile,
+  onReadOnlyFile,
+  onOpenInVscode,
   onRefresh,
   onStageFile,
   onDiscardFile,
@@ -500,6 +504,10 @@ export default function Sidebar({
               depth={0}
               onToggle={toggleNode}
               dirtyNodes={dirtyNodes}
+              files={files}
+              onSelectFile={onSelectFile}
+              onReadOnlyFile={onReadOnlyFile}
+              onOpenInVscode={onOpenInVscode}
             />
           ))
         )}
@@ -761,11 +769,19 @@ function TreeNodeView({
   depth,
   onToggle,
   dirtyNodes,
+  files,
+  onSelectFile,
+  onReadOnlyFile,
+  onOpenInVscode,
 }: {
   node: TreeItem;
   depth: number;
   onToggle: (path: string) => void;
   dirtyNodes: Map<string, BubbleKind>;
+  files: GitFile[];
+  onSelectFile: (path: string) => void;
+  onReadOnlyFile: (path: string) => void;
+  onOpenInVscode: (path: string) => void;
 }) {
   // 文件夹 + 文件节点都查:map 里既有祖先文件夹也有文件自身
   const bubble = dirtyNodes.get(node.path);
@@ -798,6 +814,27 @@ function TreeNodeView({
   // 图标透明度独立判定 —— 仅看 isIgnored,不被 dirty 压过
   const iconClass = isIgnored ? "opacity-40" : "";
 
+  // === 单击 / 双击智能分流 ===
+  // 单击:目录 → toggle 展开/折叠;文件 → modified 走 diff,clean 走 viewer
+  // 双击:文件 → 唤起 VS Code(目录双击无副作用)
+  const handleClick = () => {
+    if (node.is_dir) {
+      onToggle(node.path);
+      return;
+    }
+    const isChanged = files.some((f) => f.path === node.path);
+    if (isChanged) {
+      onSelectFile(node.path);
+    } else {
+      onReadOnlyFile(node.path);
+    }
+  };
+  const handleDoubleClick = () => {
+    if (!node.is_dir) {
+      onOpenInVscode(node.path);
+    }
+  };
+
   return (
     <div>
       <div
@@ -805,7 +842,8 @@ function TreeNodeView({
                     hover:bg-white/[0.03] transition-colors cursor-pointer
                     ${baseText} ${hoverText}`}
         style={{ paddingLeft: 8 + depth * 16 }}
-        onClick={node.is_dir ? () => onToggle(node.path) : undefined}
+        onClick={handleClick}
+        onDoubleClick={handleDoubleClick}
         title={node.path}
       >
         {node.is_dir ? (
@@ -828,6 +866,10 @@ function TreeNodeView({
             depth={depth + 1}
             onToggle={onToggle}
             dirtyNodes={dirtyNodes}
+            files={files}
+            onSelectFile={onSelectFile}
+            onReadOnlyFile={onReadOnlyFile}
+            onOpenInVscode={onOpenInVscode}
           />
         ))}
     </div>
