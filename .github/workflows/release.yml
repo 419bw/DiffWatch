@@ -21,10 +21,7 @@ jobs:
       # 这样既不会影响你本地的硬盘文件，又能让云端摆脱 gnu 的幽灵束缚
       - name: Clear local toolchain override on CI
         run: |
-          if (Test-Path "src-tauri/rust-toolchain") { Remove-Item "src-tauri/rust-toolchain" -Force }
           if (Test-Path "src-tauri/rust-toolchain.toml") { Remove-Item "src-tauri/rust-toolchain.toml" -Force }
-          if (Test-Path "rust-toolchain") { Remove-Item "rust-toolchain" -Force }
-          if (Test-Path "rust-toolchain.toml") { Remove-Item "rust-toolchain.toml" -Force }
         shell: pwsh
 
       - name: Setup Node.js 20
