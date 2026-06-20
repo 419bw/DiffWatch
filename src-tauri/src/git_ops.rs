@@ -317,14 +317,12 @@ fn guess_lang(path: &str) -> Option<String> {
 /// - 前端展开文件夹时才发起新一轮读取
 ///
 /// 过滤规则：
-/// - 任何深度都强制过滤 `.git` / `node_modules` / `target`
-///   （防止 monorepo 嵌套 node_modules 把树跑死）
+/// - **不过滤任何目录** —— node_modules / target / .git / dist / .venv 等
+///   都会进树（懒加载保底，未展开就不会卡）
 /// - 单个读取错误吞掉不致命（权限拒绝等）
 ///
 /// 排序：目录优先 + 文件次之，各自按名字（大小写不敏感）升序
 pub fn read_directory(dir_path: &str) -> Result<Vec<FileEntry>, String> {
-    const HEAVY_DIRS: &[&str] = &[".git", "node_modules", "target"];
-
     let root = PathBuf::from(dir_path);
     if !root.is_dir() {
         return Err(format!("目录不存在或不可读: {dir_path}"));
@@ -341,9 +339,6 @@ pub fn read_directory(dir_path: &str) -> Result<Vec<FileEntry>, String> {
             Ok(s) => s,
             Err(_) => continue,
         };
-        if HEAVY_DIRS.iter().any(|s| *s == name) {
-            continue;
-        }
         let ft = match entry.file_type() {
             Ok(t) => t,
             Err(_) => continue,
