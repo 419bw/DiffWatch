@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { pickRepoDir, readDirectory } from "../lib/tauri";
 import type { GitFile, FileEntry, TreeItem } from "../types";
 
@@ -31,6 +31,10 @@ const STATUS_COLOR: Record<string, string> = {
   typechange: "text-neon-green",
 };
 
+// 脏文件夹冒泡状态:modified 表示子树含 git-tracked 变更(M/S/R/T/D),
+// untracked 表示子树含未追踪文件
+type BubbleKind = "modified" | "untracked";
+
 // 把 FileEntry 数组映射成 TreeItem 数组(初始全部折叠、未加载)
 const toTreeItems = (entries: FileEntry[]): TreeItem[] =>
   entries.map((e) => ({
@@ -52,6 +56,26 @@ export default function Sidebar({
   const [tree, setTree] = useState<TreeItem[]>([]);
   const [treeLoading, setTreeLoading] = useState(false);
   const [treeError, setTreeError] = useState<string | null>(null);
+
+  // === 派生:把 CHANGES 的脏路径冒泡到祖先文件夹 + 文件自身 ===
+  // map 的 key 是节点绝对路径(文件夹或文件,与 TreeItem.path 同形),
+  // value 是要展示的气泡颜色
+  // modified 胜出冲突(已纳入 git 追踪 > 未追踪);算法从 i=1 起跳,
+  // 天然排除根目录;循环到 i <= parts.length 把文件自身也带上
+  const dirtyNodes = useMemo(() => {
+    if (!repoPath) return new Map<string, BubbleKind>();
+    const root = repoPath.replace(/\\/g, "/").replace(/\/+$/, "");
+    const map = new Map<string, BubbleKind>();
+    for (const f of files) {
+      const kind: BubbleKind = f.status === "untracked" ? "untracked" : "modified";
+      const parts = f.path.split("/").filter(Boolean);
+      for (let i = 1; i <= parts.length; i++) {
+        const abs = root + "/" + parts.slice(0, i).join("/");
+        if (map.get(abs) !== "modified") map.set(abs, kind);
+      }
+    }
+    return map;
+  }, [files, repoPath]);
 
   // === 初始化流:repoPath 变化时,read_directory(repoPath) 拿根目录第一层 ===
   useEffect(() => {
@@ -211,6 +235,7 @@ export default function Sidebar({
               node={n}
               depth={0}
               onToggle={toggleNode}
+              dirtyNodes={dirtyNodes}
             />
           ))
         )}
@@ -262,16 +287,32 @@ function TreeNodeView({
   node,
   depth,
   onToggle,
+  dirtyNodes,
 }: {
   node: TreeItem;
   depth: number;
   onToggle: (path: string) => void;
+  dirtyNodes: Map<string, BubbleKind>;
 }) {
+  // 文件夹 + 文件节点都查:map 里既有祖先文件夹也有文件自身
+  const bubble = dirtyNodes.get(node.path);
+  const baseText =
+    bubble === "modified"
+      ? "text-emerald-500/80"
+      : bubble === "untracked"
+      ? "text-amber-500/80"
+      : "text-ink-base";
+  const hoverText =
+    bubble === "modified"
+      ? "hover:text-emerald-400"
+      : bubble === "untracked"
+      ? "hover:text-amber-400"
+      : "hover:text-white";
+
   return (
     <div>
       <div
-        className="flex items-center h-5 text-[12px] font-mono text-ink-base
-                   hover:text-white cursor-pointer"
+        className={`flex items-center h-5 text-[12px] font-mono ${baseText} ${hoverText} cursor-pointer`}
         style={{ paddingLeft: 8 + depth * 16 }}
         onClick={node.is_dir ? () => onToggle(node.path) : undefined}
         title={node.path}
@@ -288,6 +329,7 @@ function TreeNodeView({
             node={child}
             depth={depth + 1}
             onToggle={onToggle}
+            dirtyNodes={dirtyNodes}
           />
         ))}
     </div>
