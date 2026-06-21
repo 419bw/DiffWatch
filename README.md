@@ -16,6 +16,40 @@
 
 ---
 
+## 它能做什么
+
+一个面向 **Windows 桌面** 的轻量 Git 变更检视器 —— 选个本地仓库,把工作区、暂存区、未追踪文件的全貌摊在一屏内,顺手把这次改动扔进 commit。
+
+| 区块 | 你能在里面做的事 |
+|---|---|
+| **左侧 · WORKSPACE** | 懒加载的目录树,扫到的文件按 `.gitignore` 自动 dim;子目录里有未追踪/改动,脏状态会冒泡到父文件夹 |
+| **中栏 · CHANGES / STAGED** | 双 Tab 分流:未暂存改动 vs 已暂存,每行带状态字母徽章 `M / U / D / S / R / T`,行尾一键 **Stage / Discard / Unstage** |
+| **右侧 · Diff** | 选中的文件立即出 split / unified diff,代码走 shiki `github-dark` 主题高亮,30+ 语言 |
+
+### 一条完整的工作流,从打开仓库到 commit 落地
+
+1. 点 **「打开仓库」** 选仓库根目录(走系统原生文件夹选择对话框)
+2. 工作区树自动加载,变更文件立刻进 CHANGES 列表
+3. 点文件看 diff,语法高亮实时渲染
+4. 行尾点 **Stage** 把文件丢进暂存区,或在 diff 视图里 **双击单行** 直接修,落盘后右侧自动重拉
+5. 切换到 STAGED Tab,点 **✨ 让 AI 起草 commit message**(可选,见下),或自己写
+6. `Ctrl + Enter` 提交,工作区自动刷新
+
+### 它 **不** 试图取代的东西
+
+- **不是 Git 客户端**:不替你做分支切换、merge、rebase、conflict resolve,这些还是交给命令行或你顺手的工具。
+- **不是云服务**:所有 Git 数据走本地静态链接的 libgit2,仓库内容不出本机;只有你**主动启用 AI 起草** 时,才会把 diff 文本发往你配置的端点。
+- **不是重型 IDE**:不内嵌 Chromium,基于系统 WebView + Tauri,安装包小、启动快。
+
+### 典型使用场景
+
+- **Code review 前的自我 review**:写完一批改动,不想在 IDE 和 Sourcetree / GitKraken 之间来回切,直接 diffWatch 里一次性看完全部变更
+- **AI 辅助 commit 起草**:接 DeepSeek / Ollama / 任意 OpenAI-compatible 端点,让模型基于 `git diff --cached` 自动写一条 commit message,默认走 DeepSeek
+- **临时检视别人的仓库**:Clone 下来一坨代码,想快速摸清结构和改动 —— 目录树 + 状态徽章一眼看清「哪些文件被改过」
+- **在没有 Git 环境的机器上**:libgit2 静态链接,运行时无需系统 Git,直接 `.git/` 读起来就能跑
+
+---
+
 ## 特性
 
 ### 轻量
